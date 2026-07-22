@@ -1,28 +1,22 @@
 <?php
 /**
  * SQL Lab Backend API - Skills Builder Hub
- * Hardened version with Advanced Analytics, Centralized History & Data Engineering Suite
- * Enhanced with: Auto-Correction Suggestions & Syntax Intelligent Feedback
+ * Centralized Multi-Tenant Database Registry Engine
  */
 
-// 1. FORCE ERROR REPORTING FOR DEBUGGING
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors', 0); 
 error_reporting(E_ALL);
 
-// 2. HEADERS (Crucial for CORS and JSON)
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-// Handle pre-flight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') { 
     http_response_code(200);
-    exit;
+    exit; 
 }
 
-// 3. DATABASE CONFIGURATIONS
 $ro_db_config = [
     'host' => 'srv1402.hstgr.io',
     'user' => 'u855754050_dineshtest',
@@ -37,258 +31,309 @@ $rw_db_config = [
     'name' => 'u855754050_mtechcandidate'
 ];
 
-// 4. INPUT PROCESSING
 $action = $_GET['action'] ?? '';
 $raw_input = file_get_contents('php://input');
 $input = json_decode($raw_input, true);
 
 try {
-    // DIAGNOSTIC: Check if JSON is actually arriving
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($raw_input)) {
-        throw new Exception("No data received by the server.");
-    }
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && is_null($input)) {
-        throw new Exception("Malformed JSON: " . json_last_error_msg());
+    // Safety guard rail: skip empty check only for dynamic database retrieval mappings
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($raw_input) && $action !== 'get_registered_dbs') {
+        throw new Exception("No metadata data matrix packets received.");
     }
 
     switch ($action) {
+        case 'get_registered_dbs':
+            get_registered_dbs($rw_db_config);
+            break;
+            
+        // --- ADD THIS CASE RIGHT HERE ---
+        case 'verify_db_login':
+            resolve_database_context($input, $rw_db_config, $ro_db_config);
+            echo json_encode(['success' => true, 'message' => 'Credentials verified.']);
+            break;
+
+        case 'register_new_db':
+            $student_name = $input['student_name'] ?? 'Anonymous';
+            register_new_db($rw_db_config, $input, $student_name);
+            break;
+
         case 'get_tables':
-            $db_mode = $input['db_mode'] ?? 'ro';
-            $db_config = ($db_mode === 'rw') ? $rw_db_config : $ro_db_config;
-            get_tables($db_config);
+            $active_config = resolve_database_context($input, $rw_db_config, $ro_db_config);
+            get_tables($active_config);
             break;
 
         case 'run_query':
-            $db_mode = $input['db_mode'] ?? 'ro';
             $query = $input['query'] ?? '';
-            run_query($query, $ro_db_config, $rw_db_config, $db_mode);
+            $student_name = $input['student_name'] ?? 'Anonymous';
+            $db_mode = $input['db_mode'] ?? 'ro';
+            $active_config = resolve_database_context($input, $rw_db_config, $ro_db_config);
+            run_query_dynamically($query, $active_config, $rw_db_config, $db_mode, $student_name);
             break;
 
-        case 'get_history':
-            $search = $input['search'] ?? '';
-            $status = $input['status'] ?? '';
-            get_history($rw_db_config, $search, $status);
-            break;
-
-        case 'generate_sql':
-            handle_ai_generation($input['prompt'] ?? '');
-            break;
-
-        case 'test_connection':
-            test_all_connections($ro_db_config, $rw_db_config);
-            break;
-
-        case 'analyze_query':
-            analyze_query($input['query'] ?? '');
-            break;
 
         case 'get_execution_plan':
-            $db_mode = $input['db_mode'] ?? 'ro';
-            $query = $input['query'] ?? '';
-            get_metadata_query("EXPLAIN " . $query, $ro_db_config, $rw_db_config, $db_mode);
+            $active_config = resolve_database_context($input, $rw_db_config, $ro_db_config);
+            get_metadata_query_dynamically("EXPLAIN " . ($input['query'] ?? ''), $active_config);
             break;
 
         case 'describe_table':
-            $db_mode = $input['db_mode'] ?? 'ro';
-            $table = $input['table'] ?? '';
-            get_metadata_query("DESCRIBE " . $table, $ro_db_config, $rw_db_config, $db_mode);
+            $active_config = resolve_database_context($input, $rw_db_config, $ro_db_config);
+            get_metadata_query_dynamically("DESCRIBE " . ($input['table'] ?? ''), $active_config);
+            break;
+
+        case 'generate_sql':
+            if (empty(trim($input['prompt'] ?? ''))) throw new Exception("Prompt is empty.");
+            echo json_encode(['sql' => "-- AI Generated:\nSELECT * FROM students LIMIT 10;"]);
+            break;
+            
+        case 'get_history':
+            // Capture search filtering patterns
+            $search_name = $input['student_name'] ?? '';
+            get_history($rw_db_config, $search_name);
+            break;
+
+        case 'clear_global_history':
+            // Verify student identity details or enforce basic truncation workflows
+            clear_global_history($rw_db_config);
             break;
 
         default:
-            throw new Exception("Unsupported action: " . htmlspecialchars($action));
+            throw new Exception("Unsupported framework command layout.");
     }
-
 } catch (Exception $e) {
     http_response_code(400);
-    echo json_encode([
-        'error' => $e->getMessage(),
-        'debug_info' => [
-            'action' => $action,
-            'method' => $_SERVER['REQUEST_METHOD']
-        ]
-    ]);
+    echo json_encode(['error' => $e->getMessage()]);
 }
 
-// --- CORE FUNCTIONS ---
-
 function db_connect($config) {
+    mysqli_report(MYSQLI_REPORT_OFF);
     $conn = @new mysqli($config['host'], $config['user'], $config['pass'], $config['name']);
     if ($conn->connect_error) {
-        throw new Exception("Connect Error (" . $conn->connect_errno . ") " . $conn->connect_error);
+        throw new Exception("Database Connection Failure: Check routing parameters.");
     }
     $conn->set_charset("utf8mb4");
     return $conn;
 }
 
+function resolve_database_context($input, $rw_config, $ro_config) {
+    $mode = $input['db_mode'] ?? 'ro';
+    $password_attempt = $input['db_pass'] ?? '';
+
+    if ($mode === 'ro') return $ro_config;
+    if ($mode === 'rw') return $rw_config;
+
+    if (strpos($mode, 'custom_') === 0) {
+        $target_db_name = substr($mode, 7);
+        $log_conn = db_connect($rw_config);
+        $stmt = $log_conn->prepare("SELECT db_host, db_user, db_password_hash FROM system_custom_databases WHERE db_name = ?");
+        $stmt->bind_param("s", $target_db_name);
+        $stmt->execute();
+        $stmt->bind_result($host, $user, $stored_password);
+        
+        if (!$stmt->fetch()) {
+            $stmt->close();
+            $log_conn->close();
+            throw new Exception("The selected database configuration workspace does not exist.");
+        }
+        $stmt->close();
+        $log_conn->close();
+
+        if ($password_attempt !== $stored_password) {
+            throw new Exception("Authentication Error: Invalid login credentials validation token.");
+        }
+
+        return [
+            'host' => $host,
+            'user' => $user,
+            'pass' => $password_attempt,
+            'name' => $target_db_name
+        ];
+    }
+    return $ro_config;
+}
+
+function get_registered_dbs($rw_config) {
+    $conn = db_connect($rw_config);
+    $result = $conn->query("SELECT db_name FROM system_custom_databases ORDER BY created_at DESC");
+    $list = [];
+    while ($row = $result->fetch_array()) { $list[] = $row[0]; }
+    $conn->close();
+    echo json_encode(['custom_databases' => $list]);
+}
+
+function register_new_db($rw_config, $input, $student_name) {
+    $host = trim($input['host'] ?? '');
+    $name = trim($input['name'] ?? '');
+    $user = trim($input['user'] ?? '');
+    $pass = trim($input['pass'] ?? '');
+
+    if (empty($host) || empty($name) || empty($user) || empty($pass)) {
+        throw new Exception("All registration targets configuration parameters must be filled.");
+    }
+
+    $test_conn = @new mysqli($host, $user, $pass, $name);
+    if ($test_conn->connect_error) {
+        throw new Exception("Handshake Refused: Credentials invalid.");
+    }
+    $test_conn->close();
+
+    $conn = db_connect($rw_config);
+    $stmt = $conn->prepare("INSERT INTO system_custom_databases (db_name, db_user, db_host, db_password_hash, registered_by) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE db_user=?, db_host=?, db_password_hash=?, registered_by=?");
+    $stmt->bind_param("sssssssss", $name, $user, $host, $pass, $student_name, $user, $host, $pass, $student_name);
+    
+    if (!$stmt->execute()) {
+        $err = $stmt->error;
+        $stmt->close();
+        $conn->close();
+        throw new Exception("Central directory logging trace failure: " . $err);
+    }
+    $stmt->close();
+    $conn->close();
+
+    echo json_encode(['success' => true, 'message' => "Database registered successfully."]);
+}
+
 function get_tables($db_config) {
     $conn = db_connect($db_config);
     $result = $conn->query("SHOW TABLES");
-    if (!$result) {
-        throw new Exception("Schema Query Failed: " . $conn->error);
-    }
     $tables = [];
     while ($row = $result->fetch_array()) { $tables[] = $row[0]; }
     $conn->close();
     echo json_encode(['tables' => $tables]);
 }
 
-function get_metadata_query($query, $ro, $rw, $mode) {
-    $conn = ($mode === 'rw') ? db_connect($rw) : db_connect($ro);
+function get_metadata_query_dynamically($query, $resolved_config) {
+    $conn = db_connect($resolved_config);
     $result = $conn->query($query);
-    if (!$result) throw new Exception("Metadata Request Failed: " . $conn->error);
-
+    if (!$result) throw new Exception("Metadata mapping error: " . $conn->error);
     $response = ['headers' => [], 'data' => []];
-    $fields = $result->fetch_fields();
-    foreach ($fields as $field) { $response['headers'][] = $field->name; }
+    foreach ($result->fetch_fields() as $field) { $response['headers'][] = $field->name; }
     while ($row = $result->fetch_assoc()) { $response['data'][] = $row; }
     $conn->close();
     echo json_encode($response);
 }
 
-function run_query($query, $ro_db_config, $rw_db_config, $db_mode) {
-    if (empty(trim($query))) {
-        throw new Exception("SQL query cannot be empty.");
+function run_query_dynamically($query, $target_config, $logging_config, $db_mode, $student_name) {
+    if (empty(trim($query))) { 
+        throw new Exception("SQL query cannot be empty."); 
     }
-
-    // --- SECURITY FIREWALL: RESTRICT query_history ACCESS ---
-    if (preg_match('/(DELETE|DROP|RENAME|ALTER)\s+.*query_history/i', $query)) {
-        throw new Exception("Security Restriction: The 'query_history' table is protected. You can only view (SELECT) or clear (TRUNCATE) it.");
+    // Security Restriction Guardrail: Blanket ban on targeting administrative infrastructure tables
+    if (preg_match('/\b(query_history|system_custom_databases)\b/i', $query)) {
+        throw new Exception("Security Restriction: Access to protected internal system catalog tables is denied by Skills Builder Hub!");
     }
-
-    $is_select = preg_match('/^\s*SELECT/i', $query);
+        
+    $user_sql_error = ''; $elapsed = 0.0; $rowCount = 0; $headers = []; $data = [];
     
     try {
-        $conn = ($is_select && $db_mode === 'ro') ? db_connect($ro_db_config) : db_connect($rw_db_config);
-    } catch (Exception $e) {
-        throw new Exception("Database Connection failed: " . $e->getMessage());
-    }
-
-    $start = microtime(true);
-    $result = $conn->query($query);
-    $elapsed = round(microtime(true) - $start, 4);
-
-    $status = $conn->error ? 'failed' : 'success';
-    $rowCount = 0;
-    if ($result instanceof mysqli_result) {
-        $rowCount = $result->num_rows;
-    } else {
-        $rowCount = $conn->affected_rows;
-    }
-
-    // --- LOG TO SHARED HISTORY ---
-    if (!preg_match('/TRUNCATE\s+TABLE\s+query_history/i', $query)) {
-        try {
-            $log_conn = db_connect($rw_db_config);
-            $stmt = $log_conn->prepare("INSERT INTO query_history (query_text, status, duration, row_count, db_mode) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("ssdis", $query, $status, $elapsed, $rowCount, $db_mode);
-            $stmt->execute();
-            $stmt->close();
-            $log_conn->close();
-        } catch (Exception $e) {}
-    }
-
-    if ($conn->error) {
-        $msg = $conn->error;
-        $conn->close();
+        $conn = db_connect($target_config);
+        $start = microtime(true);
+        $result = @$conn->query($query);
+        $elapsed = round(microtime(true) - $start, 4);
         
-        // --- AUTO-CORRECTION SUGGESTION ON ERROR ---
-        $correction = perform_auto_correction($query);
-        throw new Exception("SQL Error: " . $msg . ($correction ? " | Did you mean: " . $correction : ""));
+        if ($conn->error) { 
+            $user_sql_error = (string)$conn->error; 
+        } else {
+            $rowCount = ($result instanceof mysqli_result) ? $result->num_rows : $conn->affected_rows;
+            if ($result instanceof mysqli_result) {
+                foreach ($result->fetch_fields() as $field) { $headers[] = $field->name; }
+                while ($row = $result->fetch_assoc()) { $data[] = $row; }
+                $result->free();
+            }
+        }
+        $conn->close();
+    } catch (Exception $ex) { 
+        $user_sql_error = $ex->getMessage(); 
     }
-
-    $response = [
-        'headers' => [],
-        'data' => [],
-        'execution_time' => $elapsed,
-        'affected_rows' => $rowCount,
-        'analysis' => perform_static_analysis($query)
-    ];
-
-    if ($result instanceof mysqli_result) {
-        $fields = $result->fetch_fields();
-        foreach ($fields as $field) { $response['headers'][] = $field->name; }
-        while ($row = $result->fetch_assoc()) { $response['data'][] = $row; }
-        $result->free();
-    }
-
-    $conn->close();
-    echo json_encode($response);
-}
-
-function get_history($db_config, $search = '', $status = '') {
-    $conn = db_connect($db_config);
-    $sql = "SELECT * FROM query_history WHERE 1=1";
-    if (!empty($search)) $sql .= " AND query_text LIKE '%" . $conn->real_escape_string($search) . "%'";
-    if (!empty($status)) $sql .= " AND status = '" . $conn->real_escape_string($status) . "'";
-    $sql .= " ORDER BY started_at DESC LIMIT 50";
-    $result = $conn->query($sql);
-    if (!$result) throw new Exception("History Query Failed: " . $conn->error);
-    $history = [];
-    while ($row = $result->fetch_assoc()) { $history[] = $row; }
-    $conn->close();
-    echo json_encode(['history' => $history]);
-}
-
-// --- ADVANCED HELPER FUNCTIONS ---
-
-function perform_static_analysis($query) {
-    $warnings = [];
-    if (preg_match('/SELECT\s+\*/i', $query)) $warnings[] = "Using SELECT * can impact performance. Consider selecting specific columns.";
-    if (stripos($query, 'SELECT') !== false && stripos($query, 'WHERE') === false) $warnings[] = "Query lacks a WHERE clause; this might return a large dataset.";
-    if (stripos($query, 'SELECT') !== false && stripos($query, 'LIMIT') === false) $warnings[] = "Consider adding a LIMIT clause to large queries.";
-    return $warnings;
-}
-
-/**
- * NEW: AUTO-CORRECTION LOGIC
- * Corrects common syntax typos without changing logic
- */
-function perform_auto_correction($query) {
-    $original = $query;
     
-    // 1. Fix common misspelled keywords
-    $replacements = [
-        '/\bSELETC\b/i' => 'SELECT',
-        '/\bFROMM\b/i'  => 'FROM',
-        '/\bWHER\b/i'   => 'WHERE',
-        '/\bUDPATE\b/i' => 'UPDATE',
-        '/\bINSERTT\b/i'=> 'INSERT',
-        '/\bLIMITT\b/i' => 'LIMIT',
-        '/\bJOINN\b/i'  => 'JOIN'
-    ];
-    $query = preg_replace(array_keys($replacements), array_values($replacements), $query);
-
-    // 2. Fix missing space after SELECT
-    $query = preg_replace('/SELECT\*/i', 'SELECT *', $query);
-
-    // 3. Fix basic missing semicolon if requested (UI logic usually handles this, but here for API)
-    if (substr(trim($query), -1) !== ';') {
-        // We don't automatically add it, but we note it in analytics
+    $status = (!empty($user_sql_error)) ? 'failed' : 'success';
+    
+    try {
+        $log_conn = @new mysqli($logging_config['host'], $logging_config['user'], $logging_config['pass'], $logging_config['name']);
+        if (!$log_conn->connect_error) {
+            $log_conn->set_charset("utf8mb4");
+            $stmt = $log_conn->prepare("INSERT INTO query_history (student_name, query_text, status, error_log, duration, row_count, db_mode) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            if ($stmt) {
+                $clean_err = !empty($user_sql_error) ? $user_sql_error : null;
+                $elapsed_str = (string)$elapsed;
+                $row_count_str = (string)$rowCount;
+                $stmt->bind_param("sssssss", $student_name, $query, $status, $clean_err, $elapsed_str, $row_count_str, $db_mode);
+                $stmt->execute(); 
+                $stmt->close();
+            }
+            $log_conn->close();
+        }
+    } catch (Exception $e) {
+        // Fail-silent logging telemetry fallback block
     }
-
-    return ($original !== $query) ? $query : null;
-}
-
-function analyze_query($query) {
-    $analysis = perform_static_analysis($query);
-    $correction = perform_auto_correction($query);
+    
     echo json_encode([
-        'analysis' => $analysis,
-        'suggested_correction' => $correction
+        'success' => empty($user_sql_error), 
+        'sql_error' => $user_sql_error, 
+        'headers' => $headers, 
+        'data' => $data, 
+        'execution_time' => (float)$elapsed, 
+        'affected_rows' => (int)$rowCount, 
+        'suggested_correction' => perform_auto_correction($query)
     ]);
 }
 
-function handle_ai_generation($prompt) {
-    if (empty(trim($prompt))) throw new Exception("Prompt is empty.");
-    $mock = "-- AI Generated for: $prompt\nSELECT * FROM students WHERE grade = 'A' LIMIT 10;";
-    echo json_encode(['sql' => $mock]);
+function perform_auto_correction($query) {
+    $original = $query;
+    $replacements = [
+        '/\bSELETC\b/i' => 'SELECT', '/\bFROMM\b/i' => 'FROM', '/\bWHER\b/i' => 'WHERE',
+        '/\bUDPATE\b/i' => 'UPDATE', '/\bINSERTT\b/i'=> 'INSERT', '/\bLIMITT\b/i' => 'LIMIT'
+    ];
+    $query = preg_replace(array_keys($replacements), array_values($replacements), $query);
+    return ($original !== $query) ? $query : null;
 }
 
-function test_all_connections($ro, $rw) {
-    $report = [];
-    try { $c1 = db_connect($ro); $report['ro_db'] = "Connected Successfully"; $c1->close(); } 
-    catch (Exception $e) { $report['ro_db'] = "Failed: " . $e->getMessage(); }
-    try { $c2 = db_connect($rw); $report['rw_db'] = "Connected Successfully"; $c2->close(); } 
-    catch (Exception $e) { $report['rw_db'] = "Failed: " . $e->getMessage(); }
-    echo json_encode($report);
+function get_history($db_config, $search = '', $status = '', $student_name = '') {
+    $conn = db_connect($db_config); //[cite: 2]
+    
+    $filter_target = !empty($student_name) ? $student_name : $search;
+    
+    // 1. Calculate TOTAL logs absolute metric (Before any filters)
+    $total_res = $conn->query("SELECT COUNT(*) FROM query_history"); //[cite: 2]
+    $total_count = $total_res ? $total_res->fetch_row()[0] : 0;
+
+    // 2. Build the filter condition so we can reuse it
+    $where_clause = " WHERE 1=1";
+    if (!empty($filter_target)) {
+        $where_clause .= " AND student_name LIKE '%" . $conn->real_escape_string($filter_target) . "%'";
+    }
+
+    // 3. NEW: Calculate true MATCHING count (After Filter, but before the LIMIT cuts it off)
+    $matching_res = $conn->query("SELECT COUNT(*) FROM query_history" . $where_clause);
+    $matching_count = $matching_res ? $matching_res->fetch_row()[0] : 0;
+
+    // 4. Fetch the limited records for display page
+    $sql = "SELECT id, student_name, query_text, status, error_log, duration, row_count, db_mode, started_at FROM query_history" . $where_clause; //[cite: 2]
+    $sql .= " ORDER BY started_at DESC LIMIT 2000"; //[cite: 2]
+    
+    $result = $conn->query($sql); //[cite: 2]
+    $history = []; //[cite: 2]
+    while ($row = $result->fetch_assoc()) { //[cite: 2]
+        $history[] = $row; //[cite: 2]
+    }
+    
+    $conn->close(); //[cite: 2]
+    
+    // Pass both the absolute total and the exact matching count to the frontend
+    echo json_encode([
+        'history' => $history,
+        'records_before_filter' => (int)$total_count,
+        'records_after_filter' => (int)$matching_count
+    ]);
 }
+
+function clear_global_history($db_config) {
+    $conn = db_connect($db_config);
+    // Execute a clean system flush operation
+    if (!$conn->query("TRUNCATE TABLE query_history")) {
+        throw new Exception("Clear process rejected: " . $conn->error);
+    }
+    $conn->close();
+    echo json_encode(['success' => true, 'message' => 'Global logs wiped successfully.']);
+}
+
+?>
