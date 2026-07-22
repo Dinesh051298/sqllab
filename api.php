@@ -230,7 +230,7 @@ function run_query_dynamically($query, $target_config, $logging_config, $db_mode
         throw new Exception("SQL query cannot be empty."); 
     }
     // Security Restriction Guardrail: Blanket ban on targeting administrative infrastructure tables
-    if (preg_match('/\b(query_history|system_custom_databases)\b/i', $query)) {
+    if (preg_match('/\b(query_history|system_custom_databases| query_notes)\b/i', $query)) {
         throw new Exception("Security Restriction: Access to protected internal system catalog tables is denied by Skills Builder Hub!");
     }
         
