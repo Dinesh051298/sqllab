@@ -804,6 +804,7 @@
                                             <th>Latency</th>
                                             <th>Records</th>
                                             <th>Error Details</th> <th>Logic Snippet</th>
+                                            <th>Notes</th>
                                             <th>Options</th>
                                         </tr>
                                     </thead>
@@ -2072,7 +2073,7 @@ async function fetchSharedHistory() {
     const body = document.getElementById('shared-history-body');
     const nameSearchString = document.getElementById('history-name-search').value.trim();
     
-    body.innerHTML = '<tr><td colspan="8" class="text-center p-5"><div class="spinner-border spinner-border-sm text-info mb-3"></div><br><span class="text-white-50">Syncing user feed...</span></td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="text-center p-5"><div class="spinner-border spinner-border-sm text-info mb-3"></div><br><span class="text-white-50">Syncing user feed...</span></td></tr>';
     
     try {
         const data = await fetchAPI('get_history', { 
@@ -2103,7 +2104,7 @@ async function fetchSharedHistory() {
         `;
 
         if (!data.history || data.history.length === 0) {
-            body.innerHTML = '<tr><td colspan="8" class="p-5 text-center text-white-50">No query history records match the criteria.</td></tr>';
+            body.innerHTML = '<tr><td colspan="9" class="p-5 text-center text-white-50">No query history records match the criteria.</td></tr>';
             return;
         }
         
@@ -2114,6 +2115,8 @@ async function fetchSharedHistory() {
             const encodedQuery = btoa(unescape(encodeURIComponent(h.query_text || '')));
             const collapseId = `globalHistoryCollapse_${index}`;
             const errorCollapseId = `globalErrorCollapse_${index}`; // Unique ID for the error container
+            const notesCollapseId = `globalNotesCollapse_${index}`;
+            const noteInputId = `globalNoteInput_${index}`;
             const isFailed = (h.status === 'failed' || h.status === 'FAILED' || !h.status);
             
             const dynamicLatency = h.duration ? h.duration + 's' : '0.0000s';
@@ -2143,7 +2146,24 @@ async function fetchSharedHistory() {
                     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 });
             }
-            
+
+            const noteCount = h.note_count ? parseInt(h.note_count, 10) : 0;
+            const latestNoteHtml = h.latest_note
+                ? `<span class="small text-warning font-monospace" style="white-space:pre-wrap;">${escapeHtml(h.latest_note)}</span>`
+                : `<span class="text-white-50 opacity-25 x-small italic font-monospace">No notes yet</span>`;
+            const historyToggleHtml = noteCount > 1
+                ? `<button class="btn btn-sm btn-outline-warning py-0 px-2 x-small" type="button" data-bs-toggle="collapse" data-bs-target="#${notesCollapseId}" onclick="loadNoteHistory(${h.id}, '${notesCollapseId}', this)">${noteCount} notes</button>`
+                : '';
+
+            let notesColumn = `
+                <div class="d-flex flex-column gap-1" style="min-width:180px;">
+                    <div class="d-flex align-items-center gap-1">${latestNoteHtml}${historyToggleHtml}</div>
+                    <div class="d-flex gap-1">
+                        <input type="text" id="${noteInputId}" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Add note..." style="font-size:11px;">
+                        <button class="btn btn-sm btn-outline-info py-0 px-2 x-small" onclick="saveQueryNote(${h.id}, document.getElementById('${noteInputId}'))">ADD</button>
+                    </div>
+                </div>`;
+
             historyHtml += `
                 <tr class="${isFailed ? 'bg-danger bg-opacity-10' : ''}">
                     <td class="text-center"><i class="status-pill ${isFailed ? 'status-failed' : 'status-success'}"></i></td>
@@ -2160,11 +2180,18 @@ async function fetchSharedHistory() {
                             <code class="sql-history-code ${isFailed ? 'border-danger text-danger' : ''}">${h.query_text}</code>
                         </div>
                     </td>
+                    <td>${notesColumn}</td>
                     <td><button class="btn btn-sm ${isFailed ? 'btn-outline-danger' : 'btn-info'} py-0 px-3 fw-bold text-white" onclick="loadSQLToEditor('${encodedQuery}')">LOAD</button></td>
                 </tr>
 
+                <tr class="collapse" id="${notesCollapseId}" style="background-color: #16161e;">
+                    <td colspan="9" class="py-1 px-3 border-0">
+                        <div class="notes-history-body small font-monospace text-white-50" style="font-size:12px;">Loading notes history...</div>
+                    </td>
+                </tr>
+
                 <tr class="collapse" id="${errorCollapseId}" style="background-color: #16161e;">
-                    <td colspan="8" class="py-1 px-3 border-0">
+                    <td colspan="9" class="py-1 px-3 border-0">
                         <div class="d-flex align-items-center gap-2 rounded border border-danger border-opacity-25 px-2 py-1.5 my-1" 
                              style="background-color: rgba(247, 118, 142, 0.06); color: #f7768e; font-family: 'Roboto Mono', monospace; font-size: 12px;">
                             <div class="text-danger fw-bold text-uppercase flex-shrink-0" style="font-size: 10px; letter-spacing: 0.5px;">
@@ -2177,7 +2204,7 @@ async function fetchSharedHistory() {
                 </tr>
 
                 <tr class="collapse" id="${collapseId}">
-                    <td colspan="8" class="p-2" style="background:#111219;">
+                    <td colspan="9" class="p-2" style="background:#111219;">
                         <pre class="m-0 p-2 font-monospace text-wrap ${isFailed ? 'text-danger' : 'text-success'}" style="font-size:12px;">${h.query_text}</pre>
                     </td>
                 </tr>
@@ -2186,7 +2213,7 @@ async function fetchSharedHistory() {
         body.innerHTML = historyHtml;
     } catch(e) { 
         console.error(e);
-        body.innerHTML = '<tr><td colspan="8" class="text-danger p-4 text-center fw-bold">History load error.</td></tr>'; 
+        body.innerHTML = '<tr><td colspan="9" class="text-danger p-4 text-center fw-bold">History load error.</td></tr>';
     }
 }
 
@@ -2197,7 +2224,7 @@ function exportHistoryToCSV() {
         return;
     }
 
-    const headers = ["ID", "Student Name", "SQL Statement", "Status", "Duration", "Rows Affected", "Executed At"];
+    const headers = ["ID", "Student Name", "SQL Statement", "Status", "Duration", "Rows Affected", "Executed At", "Notes (Latest)", "Note Versions"];
     const csvContent = [
         headers.join(','),
         ...dataRows.map(r => [
@@ -2207,7 +2234,9 @@ function exportHistoryToCSV() {
             r.status,
             r.duration,
             r.row_count,
-            r.started_at
+            r.started_at,
+            `"${(r.latest_note || '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`,
+            r.note_count || 0
         ].join(','))
     ].join('\n');
 
@@ -2228,6 +2257,40 @@ function exportHistoryToCSV() {
             editor.setValue(decodeURIComponent(escape(atob(base64Sql))));
             bootstrap.Tab.getInstance(document.getElementById('results-tab')).show();
             editor.focus();
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        async function saveQueryNote(queryHistoryId, inputEl) {
+            const noteText = inputEl.value.trim();
+            if (!noteText) return;
+            try {
+                await fetchAPI('add_query_note', { query_history_id: queryHistoryId, note_text: noteText, student_name: activeStudentName });
+                inputEl.value = '';
+                fetchSharedHistory();
+            } catch (e) {
+                alert('Failed to save note: ' + e.message);
+            }
+        }
+
+        async function loadNoteHistory(queryHistoryId, collapseId, btnEl) {
+            const container = document.getElementById(collapseId).querySelector('.notes-history-body');
+            if (btnEl.dataset.loaded === 'true') return;
+            try {
+                const data = await fetchAPI('get_query_notes', { query_history_id: queryHistoryId });
+                const notes = data.notes || [];
+                container.innerHTML = notes.map(n => {
+                    const when = n.created_at ? new Date(n.created_at.trim().replace(" ", "T") + "Z").toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                    return `<div class="mb-1"><span class="fw-bold text-info">${escapeHtml(n.student_name || 'Anonymous')}</span> <span class="text-white-50">(${when})</span>: ${escapeHtml(n.note_text)}</div>`;
+                }).join('') || '<div class="text-white-50">No notes found.</div>';
+                btnEl.dataset.loaded = 'true';
+            } catch (e) {
+                container.innerHTML = `<div class="text-danger">Failed to load notes history.</div>`;
+            }
         }
 
         // --- ASSESSMENT ENGINE (EXTENDED DATASETS) ---

@@ -97,6 +97,18 @@ try {
             clear_global_history($rw_db_config);
             break;
 
+        case 'add_query_note':
+            $note_query_id = $input['query_history_id'] ?? 0;
+            $note_text = $input['note_text'] ?? '';
+            $note_student = $input['student_name'] ?? 'Anonymous';
+            add_query_note($rw_db_config, $note_query_id, $note_text, $note_student);
+            break;
+
+        case 'get_query_notes':
+            $note_query_id = $input['query_history_id'] ?? 0;
+            get_query_notes($rw_db_config, $note_query_id);
+            break;
+
         default:
             throw new Exception("Unsupported framework command layout.");
     }
@@ -289,9 +301,9 @@ function perform_auto_correction($query) {
 
 function get_history($db_config, $search = '', $status = '', $student_name = '') {
     $conn = db_connect($db_config); //[cite: 2]
-    
+
     $filter_target = !empty($student_name) ? $student_name : $search;
-    
+
     // 1. Calculate TOTAL logs absolute metric (Before any filters)
     $total_res = $conn->query("SELECT COUNT(*) FROM query_history"); //[cite: 2]
     $total_count = $total_res ? $total_res->fetch_row()[0] : 0;
@@ -299,17 +311,21 @@ function get_history($db_config, $search = '', $status = '', $student_name = '')
     // 2. Build the filter condition so we can reuse it
     $where_clause = " WHERE 1=1";
     if (!empty($filter_target)) {
-        $where_clause .= " AND student_name LIKE '%" . $conn->real_escape_string($filter_target) . "%'";
+        $esc = $conn->real_escape_string($filter_target);
+        $where_clause .= " AND (qh.student_name LIKE '%$esc%' OR qh.id IN (SELECT query_history_id FROM query_notes WHERE note_text LIKE '%$esc%'))";
     }
 
     // 3. NEW: Calculate true MATCHING count (After Filter, but before the LIMIT cuts it off)
-    $matching_res = $conn->query("SELECT COUNT(*) FROM query_history" . $where_clause);
+    $matching_res = $conn->query("SELECT COUNT(*) FROM query_history qh" . $where_clause);
     $matching_count = $matching_res ? $matching_res->fetch_row()[0] : 0;
 
     // 4. Fetch the limited records for display page
-    $sql = "SELECT id, student_name, query_text, status, error_log, duration, row_count, db_mode, started_at FROM query_history" . $where_clause; //[cite: 2]
-    $sql .= " ORDER BY started_at DESC LIMIT 2000"; //[cite: 2]
-    
+    $sql = "SELECT qh.id, qh.student_name, qh.query_text, qh.status, qh.error_log, qh.duration, qh.row_count, qh.db_mode, qh.started_at,
+            (SELECT note_text FROM query_notes WHERE query_history_id = qh.id ORDER BY created_at DESC LIMIT 1) AS latest_note,
+            (SELECT COUNT(*) FROM query_notes WHERE query_history_id = qh.id) AS note_count
+            FROM query_history qh" . $where_clause; //[cite: 2]
+    $sql .= " ORDER BY qh.started_at DESC LIMIT 2000"; //[cite: 2]
+
     $result = $conn->query($sql); //[cite: 2]
     $history = []; //[cite: 2]
     while ($row = $result->fetch_assoc()) { //[cite: 2]
@@ -334,6 +350,39 @@ function clear_global_history($db_config) {
     }
     $conn->close();
     echo json_encode(['success' => true, 'message' => 'Global logs wiped successfully.']);
+}
+
+function add_query_note($db_config, $query_history_id, $note_text, $student_name) {
+    $query_history_id = (int)$query_history_id;
+    $note_text = trim($note_text);
+    if ($query_history_id <= 0) throw new Exception("Invalid history record id.");
+    if ($note_text === '') throw new Exception("Note cannot be empty.");
+
+    $conn = db_connect($db_config);
+    $stmt = $conn->prepare("INSERT INTO query_notes (query_history_id, student_name, note_text) VALUES (?, ?, ?)");
+    $stmt->bind_param("iss", $query_history_id, $student_name, $note_text);
+    $stmt->execute();
+    $stmt->close();
+    $conn->close();
+    echo json_encode(['success' => true, 'message' => 'Note saved.']);
+}
+
+function get_query_notes($db_config, $query_history_id) {
+    $query_history_id = (int)$query_history_id;
+    if ($query_history_id <= 0) throw new Exception("Invalid history record id.");
+
+    $conn = db_connect($db_config);
+    $stmt = $conn->prepare("SELECT student_name, note_text, created_at FROM query_notes WHERE query_history_id = ? ORDER BY created_at DESC");
+    $stmt->bind_param("i", $query_history_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $notes = [];
+    while ($row = $result->fetch_assoc()) {
+        $notes[] = $row;
+    }
+    $stmt->close();
+    $conn->close();
+    echo json_encode(['notes' => $notes]);
 }
 
 ?>
