@@ -1894,6 +1894,10 @@ async function executeQuery() {
                 }
 
                 currentResults = result;
+                calculatedMeasures = [];
+                activeFilters = {};
+                rebuildAugmentedData();
+                resetDashboardForNewQuery();
                 const duration = parseFloat(result.execution_time);
                 document.getElementById('execution-analytics').classList.remove('d-none');
                 document.getElementById('stat-speed').innerText = duration > 0 ? Math.round(result.data.length/duration) : result.data.length;
@@ -2572,35 +2576,235 @@ function exportHistoryToCSV() {
         }
 
 /**
-         * Upgraded Controls populator supporting PowerBI-style visual sets
+         * BI Analytics Engine - PowerBI-style multi-visual dashboard
+         * State: dashboard.cards[] (chart configs), activeFilters (shared slicer/drill-down),
+         * calculatedMeasures[] + augmentedData (derived columns), getEffectiveRows() (single source of truth for "rows in play")
          */
-        function populateVisualizationControls(headers, data) {
-            const labelSelect = document.getElementById('label-col-select');
-            const dataSelect = document.getElementById('data-col-select');
-            const typeSelect = document.getElementById('chart-type-select');
-            
+
+        function getAllMeasureCandidateHeaders() {
+            return [...currentResults.headers, ...calculatedMeasures.map(m => m.name)];
+        }
+
+        function rebuildAugmentedData() {
+            augmentedData = currentResults.data.map(row => {
+                const newRow = { ...row };
+                calculatedMeasures.forEach(m => {
+                    const a = parseFloat(row[m.colA]);
+                    const b = parseFloat(row[m.colB]);
+                    let val;
+                    switch (m.op) {
+                        case '+': val = a + b; break;
+                        case '-': val = a - b; break;
+                        case '*': val = a * b; break;
+                        case '/': val = b !== 0 ? a / b : 0; break;
+                        default: val = 0;
+                    }
+                    newRow[m.name] = val;
+                });
+                return newRow;
+            });
+        }
+
+        function matchesActiveFilters(row, filters) {
+            return Object.keys(filters).every(col => {
+                const allowed = filters[col];
+                if (!allowed || allowed.size === 0) return true;
+                return allowed.has(String(row[col]));
+            });
+        }
+
+        function getEffectiveRows() {
+            return augmentedData.filter(row => matchesActiveFilters(row, activeFilters));
+        }
+
+        function applyFiltersAndRerender() {
+            renderResultsTable(getEffectiveRows());
+            renderActiveFiltersBar();
+            renderAllCards();
+        }
+
+        function syncSlicerCheckboxes(col) {
+            const boxes = document.querySelectorAll(`.slicer-value-checkbox[data-col="${col}"]`);
+            if (boxes.length === 0) return;
+            const allowed = activeFilters[col];
+            boxes.forEach(cb => { cb.checked = allowed ? allowed.has(cb.value) : false; });
+        }
+
+        function renderActiveFiltersBar() {
+            const bar = document.getElementById('active-filters-bar');
+            const cols = Object.keys(activeFilters).filter(c => activeFilters[c] && activeFilters[c].size > 0);
+            if (cols.length === 0) { bar.innerHTML = ''; return; }
+            bar.innerHTML = cols.map(col => {
+                const values = Array.from(activeFilters[col]).join(', ');
+                return `<span class="badge bg-warning text-dark d-flex align-items-center gap-2 py-2 px-3">
+                    ${escapeHtml(col)}: ${escapeHtml(values)}
+                    <button class="btn-close btn-close-sm clear-filter-btn" data-col="${escapeHtml(col)}" style="font-size:9px;"></button>
+                </span>`;
+            }).join('');
+            bar.querySelectorAll('.clear-filter-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const col = btn.dataset.col;
+                    delete activeFilters[col];
+                    syncSlicerCheckboxes(col);
+                    applyFiltersAndRerender();
+                };
+            });
+        }
+
+        function toggleDrillDownFilter(col, value) {
+            const strValue = String(value);
+            const existing = activeFilters[col];
+            if (existing && existing.size === 1 && existing.has(strValue)) {
+                delete activeFilters[col]; // clicking the same slice again clears the drill-down
+            } else {
+                activeFilters[col] = new Set([strValue]);
+            }
+            syncSlicerCheckboxes(col);
+            applyFiltersAndRerender();
+        }
+
+        function populateSlicerColumnPicker(headers) {
+            document.getElementById('slicer-col-select').innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join('');
+        }
+
+        function renderSlicerControl(col) {
+            const panel = document.getElementById('slicer-panel');
+            if (document.getElementById(`slicer-block-${col}`)) return;
+
+            const distinctValues = [...new Set(augmentedData.map(r => String(r[col] ?? 'NULL')))].sort();
+            const block = document.createElement('div');
+            block.id = `slicer-block-${col}`;
+            block.className = 'p-2 rounded-3 border border-secondary border-opacity-25';
+            block.style.minWidth = '180px';
+            block.style.maxHeight = '150px';
+            block.style.overflowY = 'auto';
+            block.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small fw-bold text-warning font-monospace">${escapeHtml(col)}</span>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1 remove-slicer-btn" style="font-size:10px;">&times;</button>
+                </div>
+                ${distinctValues.map((v, i) => `
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input slicer-value-checkbox" type="checkbox" value="${escapeHtml(v)}" data-col="${escapeHtml(col)}" id="slicer-${col}-${i}">
+                        <label class="form-check-label small text-white-50" for="slicer-${col}-${i}" style="font-size:11px;">${escapeHtml(v)}</label>
+                    </div>
+                `).join('')}
+            `;
+            panel.appendChild(block);
+
+            block.querySelectorAll('.slicer-value-checkbox').forEach(cb => {
+                cb.onchange = () => {
+                    const checked = Array.from(document.querySelectorAll(`.slicer-value-checkbox[data-col="${col}"]:checked`)).map(b => b.value);
+                    if (checked.length === 0) delete activeFilters[col];
+                    else activeFilters[col] = new Set(checked);
+                    applyFiltersAndRerender();
+                };
+            });
+            block.querySelector('.remove-slicer-btn').onclick = () => {
+                delete activeFilters[col];
+                block.remove();
+                applyFiltersAndRerender();
+            };
+        }
+
+        document.getElementById('add-slicer-btn').onclick = () => {
+            const col = document.getElementById('slicer-col-select').value;
+            if (col) renderSlicerControl(col);
+        };
+
+        function populateCalcMeasureColumnPickers(headers) {
+            const numericHeaders = headers.filter(h => {
+                const val = currentResults.data[0]?.[h];
+                return val !== null && val !== undefined && !isNaN(parseFloat(val)) && isFinite(val);
+            });
+            ['calc-measure-col-a', 'calc-measure-col-b'].forEach(id => {
+                document.getElementById(id).innerHTML = numericHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+            });
+        }
+
+        function renderCalcMeasureList() {
+            const list = document.getElementById('calc-measure-list');
+            list.innerHTML = calculatedMeasures.map((m, idx) => `
+                <span class="badge bg-info text-dark d-flex align-items-center gap-2 py-2 px-3">
+                    ${escapeHtml(m.name)} = ${escapeHtml(m.colA)} ${m.op} ${escapeHtml(m.colB)}
+                    <button class="btn-close btn-close-sm remove-calc-measure-btn" data-idx="${idx}" style="font-size:9px;"></button>
+                </span>
+            `).join('');
+            list.querySelectorAll('.remove-calc-measure-btn').forEach(btn => {
+                btn.onclick = () => {
+                    calculatedMeasures.splice(parseInt(btn.dataset.idx, 10), 1);
+                    rebuildAugmentedData();
+                    renderCalcMeasureList();
+                    dashboard.cards.forEach(c => populateVisualizationControls(currentResults.headers, augmentedData, c.id));
+                    applyFiltersAndRerender();
+                };
+            });
+        }
+
+        document.getElementById('add-calc-measure-btn').onclick = () => {
+            const name = document.getElementById('calc-measure-name').value.trim();
+            const colA = document.getElementById('calc-measure-col-a').value;
+            const op = document.getElementById('calc-measure-op').value;
+            const colB = document.getElementById('calc-measure-col-b').value;
+            if (!name || !colA || !colB) { alert('Please provide a name and both columns for the calculated measure.'); return; }
+            if (calculatedMeasures.some(m => m.name === name) || currentResults.headers.includes(name)) {
+                alert('That measure name is already in use.');
+                return;
+            }
+            calculatedMeasures.push({ name, colA, op, colB });
+            rebuildAugmentedData();
+            renderCalcMeasureList();
+            dashboard.cards.forEach(c => populateVisualizationControls(currentResults.headers, augmentedData, c.id));
+            document.getElementById('calc-measure-name').value = '';
+        };
+
+        /**
+         * Per-card controls populator supporting PowerBI-style visual sets.
+         * Preserves any already-selected dimension/measures/type when re-populated
+         * (e.g. after a calculated measure is added) instead of resetting the card.
+         */
+        function populateVisualizationControls(headers, data, cardId) {
+            const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
+            if (!cardEl) return;
+            const labelSelect = cardEl.querySelector('.label-col-select');
+            const dataSelect = cardEl.querySelector('.data-col-select');
+            const typeSelect = cardEl.querySelector('.chart-type-select');
+
+            const previousLabel = labelSelect.value;
+            const previousMeasures = Array.from(dataSelect.selectedOptions).map(o => o.value);
+            const previousType = typeSelect.value;
+
+            const allMeasureHeaders = getAllMeasureCandidateHeaders();
+
             labelSelect.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join('');
-            
+            if (headers.includes(previousLabel)) labelSelect.value = previousLabel;
+
             // Auto-filter number attributes for numerical metrics projection logic
-            dataSelect.innerHTML = headers.filter(h => {
+            dataSelect.innerHTML = allMeasureHeaders.filter(h => {
                 const val = data[0]?.[h];
-                return val !== null && !isNaN(parseFloat(val)) && isFinite(val);
+                return val !== null && val !== undefined && !isNaN(parseFloat(val)) && isFinite(val);
             }).map(h => `<option value="${h}">${h}</option>`).join('');
-            
-            typeSelect.innerHTML = [
-                {v: 'bar', n: 'Column / Bar Chart'},
-                {v: 'line', n: 'Line / Trend Analysis'},
-                {v: 'area', n: 'Area Continuous Chart'},
-                {v: 'pie', n: 'Pie Proportional Shares'},
-                {v: 'doughnut', n: 'Donut Composite Chart'},
-                {v: 'radar', n: 'Radar Polar Metrics'}
-            ].map(t => `<option value="${t.v}">${t.n}</option>`).join('');
-            
-            if (dataSelect.options.length > 0) dataSelect.options[0].selected = true;
-            
-            // Clean dynamic structures
-            document.getElementById('bi-kpi-strip').classList.add('d-none');
-            if (resultsChart) { resultsChart.destroy(); resultsChart = null; }
+
+            const validPrevious = previousMeasures.filter(m => allMeasureHeaders.includes(m));
+            if (validPrevious.length > 0) {
+                Array.from(dataSelect.options).forEach(o => { o.selected = validPrevious.includes(o.value); });
+            } else if (dataSelect.options.length > 0) {
+                dataSelect.options[0].selected = true;
+            }
+
+            if (!typeSelect.dataset.populated) {
+                typeSelect.innerHTML = [
+                    {v: 'bar', n: 'Column / Bar Chart'},
+                    {v: 'line', n: 'Line / Trend Analysis'},
+                    {v: 'area', n: 'Area Continuous Chart'},
+                    {v: 'pie', n: 'Pie Proportional Shares'},
+                    {v: 'doughnut', n: 'Donut Composite Chart'},
+                    {v: 'radar', n: 'Radar Polar Metrics'},
+                    {v: 'combo', n: 'Combo (Bar + Line, 2 measures)'}
+                ].map(t => `<option value="${t.v}">${t.n}</option>`).join('');
+                typeSelect.dataset.populated = 'true';
+            }
+            if (previousType) typeSelect.value = previousType;
         }
 
         /**
@@ -2633,7 +2837,7 @@ function exportHistoryToCSV() {
                 const aggregatedValues = uniqueLabels.map(label => {
                     const records = groups[label];
                     const numbers = records.map(r => parseFloat(r[mKey] ?? 0)).filter(v => !isNaN(v));
-                    
+
                     if (numbers.length === 0) return 0;
 
                     switch (aggregationType) {
@@ -2662,10 +2866,46 @@ function exportHistoryToCSV() {
         }
 
         /**
-         * Renders Dynamic KPI Blocks above Dashboard Viewports
+         * Post-processes an aggregated model: sorts categories by the primary metric
+         * and/or trims to the top N, keeping labels and every dataset's data in sync.
          */
-        function generateBIMetricsSummaryCards(labels, datasets) {
-            const kpiStrip = document.getElementById('bi-kpi-strip');
+        function applySortAndTopN(model, sortDir, topN) {
+            let indices = model.labels.map((_, i) => i);
+            if (sortDir === 'asc' || sortDir === 'desc') {
+                const primary = model.datasets[0] ? model.datasets[0].data : [];
+                indices.sort((a, b) => sortDir === 'asc' ? primary[a] - primary[b] : primary[b] - primary[a]);
+            }
+            if (topN && topN > 0) {
+                indices = indices.slice(0, topN);
+            }
+            return {
+                labels: indices.map(i => model.labels[i]),
+                datasets: model.datasets.map(ds => ({ ...ds, data: indices.map(i => ds.data[i]) }))
+            };
+        }
+
+        /**
+         * Simple least-squares linear regression trendline, one point per label
+         * (uses array index as x - not real timestamps - to stay aligned with categorical axes).
+         */
+        function computeLinearTrend(values) {
+            const n = values.length;
+            if (n === 0) return [];
+            const xs = values.map((_, i) => i);
+            const sumX = xs.reduce((a, b) => a + b, 0);
+            const sumY = values.reduce((a, b) => a + b, 0);
+            const sumXY = xs.reduce((acc, x, i) => acc + x * values[i], 0);
+            const sumXX = xs.reduce((acc, x) => acc + x * x, 0);
+            const denom = (n * sumXX - sumX * sumX);
+            const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+            const intercept = (sumY - slope * sumX) / n;
+            return xs.map(x => slope * x + intercept);
+        }
+
+        /**
+         * Renders Dynamic KPI Blocks above a given card's chart viewport
+         */
+        function generateBIMetricsSummaryCards(labels, datasets, kpiStrip) {
             if (!kpiStrip) return;
 
             kpiStrip.innerHTML = '';
@@ -2686,7 +2926,7 @@ function exportHistoryToCSV() {
             datasets.slice(0, 2).forEach((ds, idx) => {
                 const totalSum = ds.data.reduce((a, b) => a + b, 0);
                 const meanVal = totalSum / (ds.data.length || 1);
-                
+
                 const metricCard = document.createElement('div');
                 metricCard.className = 'col-md-4';
                 metricCard.innerHTML = `
@@ -2699,61 +2939,125 @@ function exportHistoryToCSV() {
             });
         }
 
+        function readCardConfigFromDOM(card) {
+            const el = document.querySelector(`[data-card-id="${card.id}"]`);
+            card.chartType = el.querySelector('.chart-type-select').value;
+            card.dimension = el.querySelector('.label-col-select').value;
+            card.aggregation = el.querySelector('.chart-agg-select').value;
+            card.measures = Array.from(el.querySelector('.data-col-select').selectedOptions).map(o => o.value);
+            card.sortDir = el.querySelector('.sort-dir-select').value;
+            const topNVal = el.querySelector('.top-n-input').value;
+            card.topN = topNVal ? parseInt(topNVal, 10) : null;
+            card.trendline = el.querySelector('.trendline-toggle').checked;
+            card.showGrid = el.querySelector('.toggle-grid').checked;
+            card.stacked = el.querySelector('.toggle-stacked').checked;
+        }
+
         /**
-         * Main Execution Blueprint: PowerBI Render Process Core Engine
+         * Main Execution Blueprint: PowerBI Render Process Core Engine (per card)
          */
-        document.getElementById('update-chart-btn').onclick = () => {
-            if (resultsChart) {
-                resultsChart.destroy();
-                resultsChart = null;
+        function renderCard(cardId) {
+            const card = dashboard.cards.find(c => c.id === cardId);
+            if (!card) return;
+            const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
+            if (!cardEl) return;
+            const comboWarning = cardEl.querySelector('.combo-warning');
+
+            readCardConfigFromDOM(card);
+
+            if (!card.dimension || card.measures.length === 0) return;
+
+            if (card.chartType === 'combo' && card.measures.length !== 2) {
+                if (comboWarning) comboWarning.classList.remove('d-none');
+                return;
             }
+            if (comboWarning) comboWarning.classList.add('d-none');
 
-            const rawVisualType = document.getElementById('chart-type-select').value;
-            const labelCol = document.getElementById('label-col-select').value;
-            const aggregationMode = document.getElementById('chart-agg-select').value;
-            const dataCols = Array.from(document.getElementById('data-col-select').selectedOptions).map(o => o.value);
-            
-            const configGridlines = document.getElementById('chart-toggle-grid').checked;
-            const configStacked = document.getElementById('chart-toggle-stacked').checked;
-            const activeThemeMode = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+            const rows = getEffectiveRows();
+            let model = processSemanticModel(rows, card.dimension, card.measures, card.aggregation);
+            model = applySortAndTopN(model, card.sortDir, card.topN);
+            card.lastRenderedLabels = model.labels;
 
-            if (!labelCol || dataCols.length === 0) return;
+            generateBIMetricsSummaryCards(model.labels, model.datasets, cardEl.querySelector('.kpi-strip'));
 
-            // Generate unified aggregated data framework model arrays
-            const model = processSemanticModel(currentResults.data, labelCol, dataCols, aggregationMode);
-            
-            // Build Context KPI elements cards arrays dynamically
-            generateBIMetricsSummaryCards(model.labels, model.datasets);
+            const rawVisualType = card.chartType;
+            const chartJsType = rawVisualType === 'area' ? 'line' : (rawVisualType === 'combo' ? 'bar' : rawVisualType);
 
-            // Polyfill Area configurations parameters mapping
-            const chartJsType = rawVisualType === 'area' ? 'line' : rawVisualType;
-            
-            const configuredDatasets = model.datasets.map((dataset, idx) => {
-                const hueValue = (idx * (360 / Math.max(dataCols.length, 1))) % 360;
+            let configuredDatasets = model.datasets.map((dataset, idx) => {
+                const hueValue = (idx * (360 / Math.max(card.measures.length, 1))) % 360;
                 const baseBackground = `hsla(${hueValue}, 75%, 60%, 0.65)`;
                 const baseBorder = `hsla(${hueValue}, 80%, 55%, 1)`;
 
                 return {
                     ...dataset,
-                    backgroundColor: (rawVisualType === 'pie' || rawVisualType === 'doughnut') 
+                    backgroundColor: (rawVisualType === 'pie' || rawVisualType === 'doughnut')
                         ? model.labels.map((_, lIdx) => `hsla(${(lIdx * (360 / model.labels.length)) % 360}, 70%, 60%, 0.75)`)
                         : baseBackground,
                     borderColor: (rawVisualType === 'pie' || rawVisualType === 'doughnut')
                         ? model.labels.map((_, lIdx) => `hsla(${(lIdx * (360 / model.labels.length)) % 360}, 75%, 50%, 1)`)
                         : baseBorder,
                     borderWidth: 2,
-                    fill: rawVisualType === 'area', // Handle custom area visualization fill trigger
+                    fill: rawVisualType === 'area',
                     tension: rawVisualType === 'line' || rawVisualType === 'area' ? 0.3 : 0,
                     borderRadius: rawVisualType === 'bar' ? 4 : 0,
-                    stack: configStacked ? 'combined_stack' : undefined
+                    stack: (card.stacked && rawVisualType !== 'combo') ? 'combined_stack' : undefined
                 };
             });
 
-            // Theme font color configuration resolution overrides
+            // Combo: first measure stays as bars on the primary axis, second becomes a line on a secondary axis
+            if (rawVisualType === 'combo') {
+                configuredDatasets = configuredDatasets.map((ds, idx) => idx === 1
+                    ? { ...ds, type: 'line', yAxisID: 'y1', backgroundColor: 'transparent', borderColor: 'hsla(200, 80%, 60%, 1)', borderWidth: 2, tension: 0.3, fill: false, borderRadius: 0 }
+                    : { ...ds, yAxisID: 'y' });
+            }
+
+            // Trendline overlay: extra dashed line dataset over the primary measure series
+            if (card.trendline && ['bar', 'line', 'area'].includes(rawVisualType) && configuredDatasets.length > 0) {
+                const trendData = computeLinearTrend(configuredDatasets[0].data);
+                configuredDatasets.push({
+                    label: `${configuredDatasets[0].label} (Trend)`,
+                    data: trendData,
+                    type: 'line',
+                    borderColor: 'rgba(255,255,255,0.6)',
+                    borderDash: [6, 4],
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0
+                });
+            }
+
+            const activeThemeMode = document.documentElement.getAttribute('data-bs-theme') || 'dark';
             const fontColorToken = activeThemeMode === 'light' ? '#334155' : '#a9b1d6';
             const gridColorToken = activeThemeMode === 'light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
 
-            resultsChart = new Chart(document.getElementById('results-chart'), {
+            const scalesConfig = (rawVisualType !== 'pie' && rawVisualType !== 'doughnut' && rawVisualType !== 'radar') ? {
+                y: {
+                    stacked: card.stacked && rawVisualType !== 'combo',
+                    grid: { color: gridColorToken, display: card.showGrid },
+                    ticks: { color: fontColorToken, font: { family: 'Roboto Mono' } }
+                },
+                x: {
+                    stacked: card.stacked && rawVisualType !== 'combo',
+                    grid: { color: gridColorToken, display: card.showGrid },
+                    ticks: { color: fontColorToken, font: { family: 'Roboto Mono' } }
+                }
+            } : {};
+
+            if (rawVisualType === 'combo') {
+                scalesConfig.y1 = {
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: fontColorToken, font: { family: 'Roboto Mono' } }
+                };
+            }
+
+            if (card.chartInstance) {
+                card.chartInstance.destroy();
+                card.chartInstance = null;
+            }
+
+            card.chartInstance = new Chart(cardEl.querySelector('.card-canvas'), {
                 type: chartJsType,
                 data: {
                     labels: model.labels,
@@ -2777,56 +3081,91 @@ function exportHistoryToCSV() {
                             padding: 12
                         }
                     },
-                    scales: (rawVisualType !== 'pie' && rawVisualType !== 'doughnut' && rawVisualType !== 'radar') ? {
-                        y: {
-                            stacked: configStacked,
-                            grid: { color: gridColorToken, display: configGridlines },
-                            ticks: { color: fontColorToken, font: { family: 'Roboto Mono' } }
-                        },
-                        x: {
-                            stacked: configStacked,
-                            grid: { color: gridColorToken, display: configGridlines },
-                            ticks: { color: fontColorToken, font: { family: 'Roboto Mono' } }
-                        }
-                    } : {}
+                    scales: scalesConfig,
+                    onClick: (evt, elements) => {
+                        if (!elements || elements.length === 0) return;
+                        const clickedLabel = card.lastRenderedLabels[elements[0].index];
+                        if (clickedLabel === undefined) return;
+                        toggleDrillDownFilter(card.dimension, clickedLabel);
+                    }
                 }
             });
+        }
+
+        function renderAllCards() {
+            dashboard.cards.forEach(c => renderCard(c.id));
+        }
+
+        function makeDefaultCard(id) {
+            return {
+                id, chartType: 'bar', dimension: null, aggregation: 'NONE', measures: [],
+                sortDir: 'none', topN: null, trendline: false, showGrid: true, stacked: false,
+                chartInstance: null, lastRenderedLabels: []
+            };
+        }
+
+        function updateAddRemoveButtonsState() {
+            const onlyOne = dashboard.cards.length <= 1;
+            document.querySelectorAll('.remove-card-btn').forEach(btn => btn.disabled = onlyOne);
+            document.getElementById('add-visual-btn').disabled = dashboard.cards.length >= 4;
+        }
+
+        function addCardToDOM(card) {
+            const template = document.getElementById('chart-card-template');
+            const frag = template.content.cloneNode(true);
+            const colEl = frag.querySelector('.chart-card-col');
+            colEl.dataset.cardId = card.id;
+            document.getElementById('dashboard-cards-container').appendChild(frag);
+
+            const cardEl = document.querySelector(`[data-card-id="${card.id}"]`);
+            cardEl.querySelector('.card-title-label').innerText = `VISUAL — ${card.id.toUpperCase()}`;
+
+            populateVisualizationControls(currentResults.headers, augmentedData, card.id);
+
+            cardEl.querySelector('.render-card-btn').onclick = () => renderCard(card.id);
+            cardEl.querySelector('.export-png-btn').onclick = () => exportCardAsPNG(card.id);
+            cardEl.querySelector('.remove-card-btn').onclick = () => removeCard(card.id);
+
+            updateAddRemoveButtonsState();
+        }
+
+        function removeCard(cardId) {
+            if (dashboard.cards.length <= 1) return;
+            const idx = dashboard.cards.findIndex(c => c.id === cardId);
+            if (idx === -1) return;
+            if (dashboard.cards[idx].chartInstance) dashboard.cards[idx].chartInstance.destroy();
+            dashboard.cards.splice(idx, 1);
+            const el = document.querySelector(`[data-card-id="${cardId}"]`);
+            if (el) el.remove();
+            updateAddRemoveButtonsState();
+        }
+
+        function resetDashboardForNewQuery() {
+            dashboard.cards.forEach(c => { if (c.chartInstance) c.chartInstance.destroy(); });
+            cardIdCounter = 1;
+            dashboard.cards = [makeDefaultCard('card-1')];
+            document.getElementById('dashboard-cards-container').innerHTML = '';
+            addCardToDOM(dashboard.cards[0]);
+        }
+
+        document.getElementById('add-visual-btn').onclick = () => {
+            if (dashboard.cards.length >= 4) return;
+            cardIdCounter++;
+            const newCard = makeDefaultCard(`card-${cardIdCounter}`);
+            dashboard.cards.push(newCard);
+            addCardToDOM(newCard);
         };
 
-        document.getElementById('update-chart-btn').onclick = () => {
-            if (resultsChart) resultsChart.destroy();
-            const type = document.getElementById('chart-type-select').value;
-            const labelCol = document.getElementById('label-col-select').value;
-            const dataCols = Array.from(document.getElementById('data-col-select').selectedOptions).map(o => o.value);
-            
-            if (!labelCol || dataCols.length === 0) return;
-
-            resultsChart = new Chart(document.getElementById('results-chart'), {
-                type: type,
-                data: {
-                    labels: currentResults.data.map(r => r[labelCol]),
-                    datasets: dataCols.map((col, i) => ({
-                        label: col,
-                        data: currentResults.data.map(r => parseFloat(r[col])),
-                        backgroundColor: `hsla(${i * 85}, 70%, 55%, 0.6)`,
-                        borderColor: `hsla(${i * 85}, 70%, 55%, 1)`,
-                        borderWidth: 2,
-                        borderRadius: 4
-                    }))
-                },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { labels: { color: document.documentElement.getAttribute('data-bs-theme') === 'light' ? '#334155' : '#a9b1d6', font: { family: 'Inter', size: 11, weight: '600' } } }
-                    },
-                    scales: type !== 'pie' && type !== 'radar' ? {
-                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#565f89' } },
-                        x: { grid: { display: false }, ticks: { color: '#565f89' } }
-                    } : {}
-                }
-            });
-        };
+        function exportCardAsPNG(cardId) {
+            const card = dashboard.cards.find(c => c.id === cardId);
+            if (!card || !card.chartInstance) { alert('Render the chart before exporting it.'); return; }
+            const link = document.createElement('a');
+            link.href = card.chartInstance.toBase64Image();
+            link.download = `sql_lab_chart_${cardId}_${new Date().toISOString().slice(0,10)}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
 
         document.getElementById('run-query-btn').onclick = (e) => { e.preventDefault(); executeQuery(); };
         
