@@ -653,6 +653,9 @@
                         <li class="nav-item">
                             <button class="nav-link" id="shared-history-tab" data-bs-toggle="tab" data-bs-target="#shared-history-panel" type="button" onclick="fetchSharedHistory()">Query History(Global)</button>
                         </li>
+                        <li class="nav-item">
+                            <button class="nav-link" id="guide-tab" data-bs-toggle="tab" data-bs-target="#guide-panel" type="button"><i class="bi bi-question-circle me-1"></i>GUIDE</button>
+                        </li>
                     </ul>
 
                     <div class="tab-content">
@@ -746,6 +749,79 @@
 
                             <div class="p-3 rounded-4 shadow-sm mb-3 border border-secondary border-opacity-10" style="background-color: #16161e;">
                                 <div class="row g-2 align-items-end">
+                                    <div class="col-md-5">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">LOAD A TABLE DIRECTLY (NO SQL NEEDED)</label>
+                                        <select id="analytics-table-select" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">ROW LIMIT</label>
+                                        <input type="number" min="1" id="analytics-table-limit" class="form-control form-control-sm bg-dark text-white border-secondary" value="500">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button id="load-table-btn" class="btn btn-sm btn-outline-info fw-bold w-100">LOAD TABLE</button>
+                                    </div>
+                                    <div class="col-md-2 text-end">
+                                        <button class="btn btn-sm btn-outline-secondary fw-bold w-100" type="button" data-bs-toggle="collapse" data-bs-target="#data-preview-collapse">DATA PREVIEW</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="collapse show" id="data-preview-collapse">
+                                <div class="p-3 rounded-4 shadow-sm mb-3 border border-secondary border-opacity-10" style="background-color: #16161e;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold text-info font-monospace" style="font-size: 12px;">DATA PREVIEW</span>
+                                        <div class="form-check form-switch d-flex align-items-center gap-2">
+                                            <input class="form-check-input" type="checkbox" id="toggle-conditional-formatting">
+                                            <label class="form-check-label text-white-50 font-monospace" for="toggle-conditional-formatting" style="font-size: 10px;">Highlight values</label>
+                                        </div>
+                                    </div>
+                                    <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                                        <table class="table table-hover table-sm">
+                                            <thead id="analytics-preview-head"></thead>
+                                            <tbody id="analytics-preview-body"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="quick-insights-panel" class="row g-2 mb-3"></div>
+
+                            <div class="p-3 rounded-4 shadow-sm mb-3 border border-secondary border-opacity-10" style="background-color: #16161e;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold text-info font-monospace" style="font-size: 12px;">PIVOT / CROSS-TAB TABLE</span>
+                                </div>
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-3">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">ROWS</label>
+                                        <select id="pivot-row-select" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">COLUMNS</label>
+                                        <select id="pivot-col-select" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">VALUE</label>
+                                        <select id="pivot-value-select" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">AGGREGATION</label>
+                                        <select id="pivot-agg-select" class="form-select form-select-sm bg-dark text-white border-secondary">
+                                            <option value="SUM">SUM</option>
+                                            <option value="AVG">AVERAGE</option>
+                                            <option value="COUNT">COUNT</option>
+                                            <option value="MIN">MINIMUM</option>
+                                            <option value="MAX">MAXIMUM</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <button id="build-pivot-btn" class="btn btn-sm btn-info fw-bold w-100">GO</button>
+                                    </div>
+                                </div>
+                                <div id="pivot-table-container" class="table-container mt-3" style="max-height: 360px; overflow-y: auto;"></div>
+                            </div>
+
+                            <div class="p-3 rounded-4 shadow-sm mb-3 border border-secondary border-opacity-10" style="background-color: #16161e;">
+                                <div class="row g-2 align-items-end">
                                     <div class="col-md-3">
                                         <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">CALCULATED MEASURE NAME</label>
                                         <input type="text" id="calc-measure-name" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="e.g. Total">
@@ -807,8 +883,8 @@
                                             <select class="form-select form-select-sm bg-dark text-white border-secondary chart-type-select"></select>
                                         </div>
                                         <div class="col-6 col-lg-3">
-                                            <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">X-AXIS</label>
-                                            <select class="form-select form-select-sm bg-dark text-white border-secondary label-col-select"></select>
+                                            <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">GROUP BY (hold Ctrl, up to 3)</label>
+                                            <select class="form-select form-select-sm bg-dark text-white border-secondary label-col-select" multiple style="min-height: 34px; max-height: 80px;"></select>
                                         </div>
                                         <div class="col-6 col-lg-3">
                                             <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">AGGREGATION</label>
@@ -824,7 +900,7 @@
                                         <div class="col-6 col-lg-3">
                                             <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">MEASURES (hold Ctrl for multiple)</label>
                                             <select class="form-select form-select-sm bg-dark text-white border-secondary data-col-select" multiple style="min-height: 34px; max-height: 80px;"></select>
-                                            <small class="text-danger d-none combo-warning" style="font-size: 10px;">Select exactly 2 measures for a Combo chart.</small>
+                                            <small class="text-danger d-none combo-warning" style="font-size: 10px;">Select exactly 2 measures for a Combo or Scatter chart.</small>
                                         </div>
                                     </div>
                                     <div class="row g-2 mb-2 align-items-center">
@@ -887,6 +963,126 @@
                                     </thead>
                                     <tbody id="shared-history-body"></tbody>
                                 </table>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="guide-panel">
+                            <div class="analytics-card mb-3 p-3 rounded-4 bg-dark bg-opacity-50">
+                                <i class="bi bi-info-circle text-info me-2"></i>
+                                <span class="small text-white-50">This page explains every control in the <b>ANALYTICS</b> tab, so you can practice the same concepts Power BI teaches &mdash; without needing Power BI.</span>
+                            </div>
+
+                            <div class="accordion" id="guide-accordion">
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-load-table">1. Load data without writing SQL</button>
+                                    </h2>
+                                    <div id="guide-load-table" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            At the top of the <b>ANALYTICS</b> tab, pick any table from the <b>"Load a table directly"</b> dropdown, set a row limit, and click <b>LOAD TABLE</b>. This runs a simple <code>SELECT * FROM table LIMIT N</code> behind the scenes and drops the result straight into the Analytics tab &mdash; the <b>Data Preview</b> table and a default chart appear immediately, with zero SQL required. You can still edit the generated query in the editor afterwards if you want to filter or join before analyzing.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-data-preview">2. Data Preview &amp; conditional formatting</button>
+                                    </h2>
+                                    <div id="guide-data-preview" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            The <b>Data Preview</b> table shows the raw rows currently in play (after any slicers/drill-downs are applied), right inside Analytics &mdash; no need to flip back to the Results tab. Toggle <b>"Highlight values"</b> to turn on conditional formatting: every fully-numeric column is shaded on a red&rarr;green scale from its lowest to highest visible value, the same idea as Excel/Power BI color scales.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-groupby">3. Group By &amp; Aggregation</button>
+                                    </h2>
+                                    <div id="guide-groupby" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            <b>GROUP BY</b> picks 1-3 columns to bucket your rows by (hold Ctrl to select more than one &mdash; e.g. Region + Category groups by every combination of the two). <b>AGGREGATION</b> decides how the chosen <b>MEASURES</b> are summarized per group: SUM, AVERAGE, COUNT, MINIMUM, or MAXIMUM &mdash; or "None" to plot every raw row ungrouped. This mirrors exactly what Group By + a measure aggregation does in Power BI or a SQL <code>GROUP BY</code> clause.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-sort">4. Sort &amp; Top N</button>
+                                    </h2>
+                                    <div id="guide-sort" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            <b>SORT</b> reorders your chart's categories by the first measure's value (ascending or descending). <b>TOP N</b> trims the chart to only the strongest (or weakest, combined with ascending sort) N categories &mdash; e.g. "Top 5 products by revenue," a very common real-world reporting task.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-slicers">5. Slicers &amp; drill-down</button>
+                                    </h2>
+                                    <div id="guide-slicers" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            <b>ADD SLICER</b> lets you filter by picking specific values from any column via checkboxes &mdash; exactly like a Power BI slicer visual. <b>Drill-down</b> is the same idea one click away: click any bar/slice/point on a chart to instantly filter every visual and the Data Preview to just that group; click it again to clear the filter. Active filters show as removable chips above the charts.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-calc">6. Calculated measures</button>
+                                    </h2>
+                                    <div id="guide-calc" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            Build a new numeric column from two existing ones with a simple formula (<code>NewCol = ColumnA operator ColumnB</code>). This is the same concept as a Power BI "New Measure" or Excel formula column &mdash; the result becomes selectable as a measure everywhere else in Analytics (charts, pivot, Quick Insights).
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-trend">7. Trendline &amp; Combo chart</button>
+                                    </h2>
+                                    <div id="guide-trend" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            <b>Trendline</b> overlays a dashed best-fit line over a Bar/Line/Area chart, showing the overall direction of your data &mdash; a basic forecasting concept. <b>Combo chart</b> plots your first measure as bars and your second as a line on its own right-hand axis, useful for comparing two measures on very different scales (e.g. Revenue vs. Growth %). Combo requires selecting exactly 2 measures.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-scatter">8. Scatter chart &amp; correlation</button>
+                                    </h2>
+                                    <div id="guide-scatter" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            Pick "Scatter Plot" with exactly 2 measures to plot every row as a point (first measure = X, second = Y). Above the chart you'll see the <b>Pearson correlation coefficient (r)</b>, from -1 (perfect negative relationship) to +1 (perfect positive relationship), labeled Strong/Moderate/Weak/Negligible &mdash; the standard way analysts check if two numbers move together.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-pivot">9. Pivot / cross-tab table</button>
+                                    </h2>
+                                    <div id="guide-pivot" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            Pick a <b>Rows</b> column, a <b>Columns</b> column, and a <b>Value</b> measure + aggregation, then click <b>GO</b>. This builds a matrix table (like an Excel PivotTable or Power BI Matrix visual) showing every Rows &times; Columns combination's aggregated value, with row totals &mdash; a different, often clearer way to explore two-dimensional data than a chart.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-insights">10. Quick Insights</button>
+                                    </h2>
+                                    <div id="guide-insights" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            Automatically computed for every numeric column in your current (filtered) data: Minimum, Maximum, Average, Median, Standard Deviation, and Null count &mdash; the descriptive statistics an analyst checks first before building any chart, updated live as you slice/drill down.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item bg-transparent border-secondary border-opacity-25">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed bg-dark text-info fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#guide-canvas">11. Multi-visual dashboard &amp; PNG export</button>
+                                    </h2>
+                                    <div id="guide-canvas" class="accordion-collapse collapse" data-bs-parent="#guide-accordion">
+                                        <div class="accordion-body small text-white-50">
+                                            Click <b>ADD VISUAL</b> to build up to 4 charts side by side, each independently configured, sharing the same slicers/drill-down &mdash; like building a real Power BI report page with multiple visuals. Use the <i class="bi bi-image"></i> button on any chart card to export it as a PNG image, and <i class="bi bi-x-lg"></i> to remove a visual (at least one must remain).
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1827,6 +2023,7 @@ async function fetchTables() {
         
         if (!result.tables || result.tables.length === 0) {
             list.innerHTML = '<div class="text-white-50 text-center p-4 small italic">Dictionary is currently empty.</div>';
+            populateAnalyticsTableSelect();
             return;
         }
 
@@ -1851,6 +2048,7 @@ async function fetchTables() {
         
         // Propagate updated metadata to the hinting engine
         editor.setOption("hintOptions", { tables: dbTables });
+        populateAnalyticsTableSelect();
         
         const connIndicator = document.getElementById('connection-indicator');
         if (connIndicator) connIndicator.classList.remove('d-none');
@@ -1867,7 +2065,15 @@ async function fetchTables() {
 async function executeQuery() {
             const query = editor.getValue().trim();
             if (!query) return;
+            await runQuery(query);
+        }
 
+        /**
+         * Shared execution core: runs any SQL string through the exact same
+         * pipeline executeQuery() uses, so the Analytics table-loader path
+         * (no manual SQL) stays in sync with the manual-query path.
+         */
+        async function runQuery(query) {
             setButtonLoading(true, document.getElementById('btn-text'), document.getElementById('btn-loader'));
             document.getElementById('execution-analytics').classList.add('d-none');
             const msgArea = document.getElementById('msg-area');
@@ -1896,6 +2102,7 @@ async function executeQuery() {
                 currentResults = result;
                 calculatedMeasures = [];
                 activeFilters = {};
+                pivotConfigured = false;
                 rebuildAugmentedData();
                 resetDashboardForNewQuery();
                 const duration = parseFloat(result.execution_time);
@@ -2520,19 +2727,207 @@ function exportHistoryToCSV() {
 
             populateCalcMeasureColumnPickers(headers);
             populateSlicerColumnPicker(headers);
+            populatePivotColumnPickers(headers);
             renderActiveFiltersBar();
             renderCalcMeasureList();
+
+            document.getElementById('analytics-preview-head').innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+            renderAnalyticsDataPreview(getEffectiveRows());
+            renderQuickInsights(getEffectiveRows());
+            renderPivotTable();
 
             dashboard.cards.forEach(c => populateVisualizationControls(headers, augmentedData, c.id));
             renderAllCards();
         }
 
-        function renderResultsTable(rows) {
-            const headers = currentResults.headers;
-            document.getElementById('results-body').innerHTML = rows.map(row => `
-                <tr>${headers.map(h => `<td>${row[h] ?? '<span class="text-white-50 x-small italic">NULL</span>'}</td>`).join('')}</tr>
+        /**
+         * Shared row-rendering core for the Results tab table and the Analytics Data Preview
+         * table, with optional conditional-formatting (min/max color scale on numeric columns).
+         */
+        function computeNumericColumnRanges(headers, rows) {
+            const ranges = {};
+            headers.forEach(h => {
+                const values = rows.map(r => parseFloat(r[h])).filter(v => !isNaN(v));
+                if (values.length > 0 && values.length === rows.length) {
+                    ranges[h] = { min: Math.min(...values), max: Math.max(...values) };
+                }
+            });
+            return ranges;
+        }
+
+        function conditionalCellStyle(value, range) {
+            if (!range || range.max === range.min) return '';
+            const v = parseFloat(value);
+            if (isNaN(v)) return '';
+            const t = (v - range.min) / (range.max - range.min);
+            const r = Math.round(255 * (1 - t) * 0.6 + 60);
+            const g = Math.round(255 * t * 0.6 + 60);
+            return ` style="background-color: rgba(${r}, ${g}, 80, 0.35);"`;
+        }
+
+        function buildTableRowsHtml(headers, rows, useConditionalFormatting) {
+            const ranges = useConditionalFormatting ? computeNumericColumnRanges(headers, rows) : {};
+            return rows.map(row => `
+                <tr>${headers.map(h => `<td${conditionalCellStyle(row[h], ranges[h])}>${row[h] ?? '<span class="text-white-50 x-small italic">NULL</span>'}</td>`).join('')}</tr>
             `).join('');
         }
+
+        function renderResultsTable(rows) {
+            document.getElementById('results-body').innerHTML = buildTableRowsHtml(currentResults.headers, rows, false);
+        }
+
+        function renderAnalyticsDataPreview(rows) {
+            const useCF = document.getElementById('toggle-conditional-formatting')?.checked;
+            document.getElementById('analytics-preview-body').innerHTML = buildTableRowsHtml(currentResults.headers, rows, useCF);
+        }
+
+        document.getElementById('toggle-conditional-formatting').onchange = () => renderAnalyticsDataPreview(getEffectiveRows());
+
+        /**
+         * Table loader: lets a student explore a table's data and charts inside
+         * Analytics without writing/running SQL manually. Reuses the exact same
+         * runQuery()/currentResults/displayResults pipeline as the SQL editor.
+         */
+        function populateAnalyticsTableSelect() {
+            const sel = document.getElementById('analytics-table-select');
+            if (!sel) return;
+            sel.innerHTML = Object.keys(dbTables).map(t => `<option value="${t}">${t}</option>`).join('');
+        }
+
+        async function loadTableIntoAnalytics() {
+            const table = document.getElementById('analytics-table-select').value;
+            if (!table) { alert('Pick a table first.'); return; }
+            const limit = parseInt(document.getElementById('analytics-table-limit').value, 10) || 500;
+            const query = `SELECT * FROM \`${table}\` LIMIT ${limit}`;
+            editor.setValue(query);
+            await runQuery(query);
+            bootstrap.Tab.getOrCreateInstance(document.getElementById('viz-tab')).show();
+        }
+
+        document.getElementById('load-table-btn').onclick = () => { loadTableIntoAnalytics(); };
+
+        /**
+         * Quick Insights: auto-computed descriptive stats per numeric column.
+         */
+        function computeColumnStats(rows, col) {
+            const raw = rows.map(r => r[col]);
+            const numeric = raw.map(v => parseFloat(v)).filter(v => !isNaN(v));
+            if (numeric.length === 0) return null;
+            const nullCount = raw.length - numeric.length;
+            const sorted = [...numeric].sort((a, b) => a - b);
+            const min = sorted[0];
+            const max = sorted[sorted.length - 1];
+            const avg = numeric.reduce((a, b) => a + b, 0) / numeric.length;
+            const mid = Math.floor(sorted.length / 2);
+            const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+            const variance = numeric.reduce((acc, v) => acc + Math.pow(v - avg, 2), 0) / numeric.length;
+            const std = Math.sqrt(variance);
+            return { min, max, avg, median, std, nullCount };
+        }
+
+        function renderQuickInsights(rows) {
+            const panel = document.getElementById('quick-insights-panel');
+            if (!panel) return;
+            if (rows.length === 0) { panel.innerHTML = ''; return; }
+            const headers = getAllMeasureCandidateHeaders();
+            const tiles = headers.map(h => {
+                const stats = computeColumnStats(rows, h);
+                if (!stats) return '';
+                return `
+                    <div class="col-md-3">
+                        <div class="p-2 rounded-3 border border-secondary border-opacity-10 font-monospace" style="background-color: rgba(122, 162, 247, 0.04); border-left: 3px solid var(--tokyo-accent) !important;">
+                            <div class="text-info fw-bold text-truncate" style="font-size: 11px;">${escapeHtml(h)}</div>
+                            <div class="text-white-50" style="font-size: 10px; line-height: 1.6;">
+                                Min ${Number(stats.min.toFixed(2)).toLocaleString()} &middot; Max ${Number(stats.max.toFixed(2)).toLocaleString()}<br>
+                                Avg ${Number(stats.avg.toFixed(2)).toLocaleString()} &middot; Median ${Number(stats.median.toFixed(2)).toLocaleString()}<br>
+                                Std Dev ${Number(stats.std.toFixed(2)).toLocaleString()} &middot; Nulls ${stats.nullCount}
+                            </div>
+                        </div>
+                    </div>`;
+            }).join('');
+            panel.innerHTML = tiles;
+        }
+
+        /**
+         * Pivot / cross-tab table: rows x columns x aggregated value, computed from
+         * getEffectiveRows() so it respects slicers/drill-down like everything else.
+         */
+        function aggregateValues(numbers, aggregationType) {
+            if (numbers.length === 0) return 0;
+            switch (aggregationType) {
+                case 'SUM': return numbers.reduce((a, b) => a + b, 0);
+                case 'AVG': return numbers.reduce((a, b) => a + b, 0) / numbers.length;
+                case 'COUNT': return numbers.length;
+                case 'MIN': return Math.min(...numbers);
+                case 'MAX': return Math.max(...numbers);
+                default: return 0;
+            }
+        }
+
+        function populatePivotColumnPickers(headers) {
+            ['pivot-row-select', 'pivot-col-select'].forEach(id => {
+                document.getElementById(id).innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join('');
+            });
+            const numericHeaders = getAllMeasureCandidateHeaders().filter(h => {
+                const val = augmentedData[0]?.[h];
+                return val !== null && val !== undefined && !isNaN(parseFloat(val)) && isFinite(val);
+            });
+            document.getElementById('pivot-value-select').innerHTML = numericHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+        }
+
+        function computePivot(rows, rowKey, colKey, valueKey, aggregation) {
+            const rowVals = [...new Set(rows.map(r => String(r[rowKey] ?? 'NULL')))];
+            const colVals = [...new Set(rows.map(r => String(r[colKey] ?? 'NULL')))];
+            const matrix = rowVals.map(rv => ({
+                rowVal: rv,
+                cells: colVals.map(cv => {
+                    const numbers = rows
+                        .filter(r => String(r[rowKey] ?? 'NULL') === rv && String(r[colKey] ?? 'NULL') === cv)
+                        .map(r => parseFloat(r[valueKey])).filter(v => !isNaN(v));
+                    return aggregateValues(numbers, aggregation);
+                })
+            }));
+            return { rowVals, colVals, matrix };
+        }
+
+        let pivotConfigured = false;
+
+        function renderPivotTable() {
+            const container = document.getElementById('pivot-table-container');
+            if (!container) return;
+            if (!pivotConfigured) { container.innerHTML = ''; return; }
+
+            const rowKey = document.getElementById('pivot-row-select').value;
+            const colKey = document.getElementById('pivot-col-select').value;
+            const valueKey = document.getElementById('pivot-value-select').value;
+            const aggregation = document.getElementById('pivot-agg-select').value;
+            if (!rowKey || !colKey || !valueKey) { container.innerHTML = '<div class="text-white-50 small p-3">Pick Rows, Columns, and Value first.</div>'; return; }
+
+            const rows = getEffectiveRows();
+            const { rowVals, colVals, matrix } = computePivot(rows, rowKey, colKey, valueKey, aggregation);
+
+            let html = '<table class="table table-sm table-hover"><thead><tr><th></th>';
+            html += colVals.map(cv => `<th>${escapeHtml(cv)}</th>`).join('');
+            html += '<th>Total</th></tr></thead><tbody>';
+            matrix.forEach(({ rowVal, cells }) => {
+                const rowNumbers = rows.filter(r => String(r[rowKey] ?? 'NULL') === rowVal).map(r => parseFloat(r[valueKey])).filter(v => !isNaN(v));
+                const rowTotal = aggregateValues(rowNumbers, aggregation);
+                html += `<tr><td class="fw-bold text-info">${escapeHtml(rowVal)}</td>`;
+                html += cells.map(v => `<td>${Number(v.toFixed(2)).toLocaleString()}</td>`).join('');
+                html += `<td class="fw-bold">${Number(rowTotal.toFixed(2)).toLocaleString()}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        document.getElementById('build-pivot-btn').onclick = () => {
+            const rowKey = document.getElementById('pivot-row-select').value;
+            const colKey = document.getElementById('pivot-col-select').value;
+            const valueKey = document.getElementById('pivot-value-select').value;
+            if (!rowKey || !colKey || !valueKey) { alert('Pick Rows, Columns, and Value first.'); return; }
+            pivotConfigured = true;
+            renderPivotTable();
+        };
 
         function displayMessage(type, text) {
             const area = document.getElementById('msg-area');
@@ -2618,7 +3013,11 @@ function exportHistoryToCSV() {
         }
 
         function applyFiltersAndRerender() {
-            renderResultsTable(getEffectiveRows());
+            const rows = getEffectiveRows();
+            renderResultsTable(rows);
+            renderAnalyticsDataPreview(rows);
+            renderQuickInsights(rows);
+            renderPivotTable();
             renderActiveFiltersBar();
             renderAllCards();
         }
@@ -2651,15 +3050,23 @@ function exportHistoryToCSV() {
             });
         }
 
-        function toggleDrillDownFilter(col, value) {
-            const strValue = String(value);
-            const existing = activeFilters[col];
-            if (existing && existing.size === 1 && existing.has(strValue)) {
-                delete activeFilters[col]; // clicking the same slice again clears the drill-down
+        /**
+         * Drill-down for possibly multi-column Group By: clicking a bar/slice sets or clears
+         * an exact-match filter on every column in that group's combination at once.
+         */
+        function toggleDrillDownFilters(keysObj) {
+            const cols = Object.keys(keysObj);
+            if (cols.length === 0) return;
+            const alreadyActive = cols.every(col => {
+                const existing = activeFilters[col];
+                return existing && existing.size === 1 && existing.has(String(keysObj[col]));
+            });
+            if (alreadyActive) {
+                cols.forEach(col => delete activeFilters[col]); // clicking the same combination again clears it
             } else {
-                activeFilters[col] = new Set([strValue]);
+                cols.forEach(col => { activeFilters[col] = new Set([String(keysObj[col])]); });
             }
-            syncSlicerCheckboxes(col);
+            cols.forEach(syncSlicerCheckboxes);
             applyFiltersAndRerender();
         }
 
@@ -2736,6 +3143,7 @@ function exportHistoryToCSV() {
                     rebuildAugmentedData();
                     renderCalcMeasureList();
                     dashboard.cards.forEach(c => populateVisualizationControls(currentResults.headers, augmentedData, c.id));
+                    populatePivotColumnPickers(currentResults.headers);
                     applyFiltersAndRerender();
                 };
             });
@@ -2755,6 +3163,8 @@ function exportHistoryToCSV() {
             rebuildAugmentedData();
             renderCalcMeasureList();
             dashboard.cards.forEach(c => populateVisualizationControls(currentResults.headers, augmentedData, c.id));
+            populatePivotColumnPickers(currentResults.headers);
+            applyFiltersAndRerender();
             document.getElementById('calc-measure-name').value = '';
         };
 
@@ -2770,14 +3180,19 @@ function exportHistoryToCSV() {
             const dataSelect = cardEl.querySelector('.data-col-select');
             const typeSelect = cardEl.querySelector('.chart-type-select');
 
-            const previousLabel = labelSelect.value;
+            const previousDimensions = Array.from(labelSelect.selectedOptions).map(o => o.value);
             const previousMeasures = Array.from(dataSelect.selectedOptions).map(o => o.value);
             const previousType = typeSelect.value;
 
             const allMeasureHeaders = getAllMeasureCandidateHeaders();
 
             labelSelect.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join('');
-            if (headers.includes(previousLabel)) labelSelect.value = previousLabel;
+            const validPreviousDimensions = previousDimensions.filter(d => headers.includes(d));
+            if (validPreviousDimensions.length > 0) {
+                Array.from(labelSelect.options).forEach(o => { o.selected = validPreviousDimensions.includes(o.value); });
+            } else if (labelSelect.options.length > 0) {
+                labelSelect.options[0].selected = true;
+            }
 
             // Auto-filter number attributes for numerical metrics projection logic
             dataSelect.innerHTML = allMeasureHeaders.filter(h => {
@@ -2800,7 +3215,8 @@ function exportHistoryToCSV() {
                     {v: 'pie', n: 'Pie Proportional Shares'},
                     {v: 'doughnut', n: 'Donut Composite Chart'},
                     {v: 'radar', n: 'Radar Polar Metrics'},
-                    {v: 'combo', n: 'Combo (Bar + Line, 2 measures)'}
+                    {v: 'combo', n: 'Combo (Bar + Line, 2 measures)'},
+                    {v: 'scatter', n: 'Scatter Plot + Correlation (2 measures)'}
                 ].map(t => `<option value="${t.v}">${t.n}</option>`).join('');
                 typeSelect.dataset.populated = 'true';
             }
@@ -2811,10 +3227,11 @@ function exportHistoryToCSV() {
          * Central Processing Aggregation Engine
          * Transforms flat queries into aggregated semantic models inside the client runtime context
          */
-        function processSemanticModel(rawData, dimensionKey, metricsKeys, aggregationType) {
+        function processSemanticModel(rawData, dimensionKeys, metricsKeys, aggregationType) {
             if (aggregationType === 'NONE') {
                 return {
-                    labels: rawData.map(r => String(r[dimensionKey] ?? 'NULL')),
+                    labels: rawData.map(r => dimensionKeys.map(k => String(r[k] ?? 'NULL')).join(' | ')),
+                    labelKeys: rawData.map(r => Object.fromEntries(dimensionKeys.map(k => [k, String(r[k] ?? 'NULL')]))),
                     datasets: metricsKeys.map(mKey => ({
                         label: mKey,
                         data: rawData.map(r => parseFloat(r[mKey] ?? 0))
@@ -2822,12 +3239,15 @@ function exportHistoryToCSV() {
                 };
             }
 
-            // Grouping phase mapping
+            // Grouping phase mapping - the group key is the composite of every Group By column
             const groups = {};
+            const groupKeyValues = {};
             rawData.forEach(row => {
-                const groupVal = String(row[dimensionKey] ?? 'NULL');
+                const keyParts = dimensionKeys.map(k => String(row[k] ?? 'NULL'));
+                const groupVal = keyParts.join(' | ');
                 if (!groups[groupVal]) {
                     groups[groupVal] = [];
+                    groupKeyValues[groupVal] = Object.fromEntries(dimensionKeys.map((k, i) => [k, keyParts[i]]));
                 }
                 groups[groupVal].push(row);
             });
@@ -2837,23 +3257,7 @@ function exportHistoryToCSV() {
                 const aggregatedValues = uniqueLabels.map(label => {
                     const records = groups[label];
                     const numbers = records.map(r => parseFloat(r[mKey] ?? 0)).filter(v => !isNaN(v));
-
-                    if (numbers.length === 0) return 0;
-
-                    switch (aggregationType) {
-                        case 'SUM':
-                            return numbers.reduce((a, b) => a + b, 0);
-                        case 'AVG':
-                            return numbers.reduce((a, b) => a + b, 0) / numbers.length;
-                        case 'COUNT':
-                            return numbers.length;
-                        case 'MIN':
-                            return Math.min(...numbers);
-                        case 'MAX':
-                            return Math.max(...numbers);
-                        default:
-                            return 0;
-                    }
+                    return aggregateValues(numbers, aggregationType);
                 });
 
                 return {
@@ -2862,12 +3266,12 @@ function exportHistoryToCSV() {
                 };
             });
 
-            return { labels: uniqueLabels, datasets: processedDatasets };
+            return { labels: uniqueLabels, labelKeys: uniqueLabels.map(l => groupKeyValues[l]), datasets: processedDatasets };
         }
 
         /**
          * Post-processes an aggregated model: sorts categories by the primary metric
-         * and/or trims to the top N, keeping labels and every dataset's data in sync.
+         * and/or trims to the top N, keeping labels/labelKeys and every dataset's data in sync.
          */
         function applySortAndTopN(model, sortDir, topN) {
             let indices = model.labels.map((_, i) => i);
@@ -2880,6 +3284,7 @@ function exportHistoryToCSV() {
             }
             return {
                 labels: indices.map(i => model.labels[i]),
+                labelKeys: indices.map(i => model.labelKeys[i]),
                 datasets: model.datasets.map(ds => ({ ...ds, data: indices.map(i => ds.data[i]) }))
             };
         }
@@ -2900,6 +3305,97 @@ function exportHistoryToCSV() {
             const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
             const intercept = (sumY - slope * sumX) / n;
             return xs.map(x => slope * x + intercept);
+        }
+
+        /**
+         * Pearson correlation coefficient, for the Scatter chart's "r" KPI tile.
+         */
+        function computePearsonCorrelation(xs, ys) {
+            const n = xs.length;
+            if (n === 0) return 0;
+            const meanX = xs.reduce((a, b) => a + b, 0) / n;
+            const meanY = ys.reduce((a, b) => a + b, 0) / n;
+            let num = 0, denX = 0, denY = 0;
+            for (let i = 0; i < n; i++) {
+                const dx = xs[i] - meanX, dy = ys[i] - meanY;
+                num += dx * dy;
+                denX += dx * dx;
+                denY += dy * dy;
+            }
+            const den = Math.sqrt(denX * denY);
+            return den !== 0 ? num / den : 0;
+        }
+
+        function describeCorrelation(r) {
+            const abs = Math.abs(r);
+            const direction = r >= 0 ? 'positive' : 'negative';
+            let strength;
+            if (abs >= 0.7) strength = 'Strong';
+            else if (abs >= 0.4) strength = 'Moderate';
+            else if (abs >= 0.2) strength = 'Weak';
+            else strength = 'Negligible';
+            return `${strength} ${direction}`;
+        }
+
+        /**
+         * Scatter chart special case: always plots raw (ungrouped) rows for exactly 2
+         * measures and shows the Pearson correlation as a KPI tile. Bypasses
+         * processSemanticModel/sort/trendline/combo entirely - none of those concepts
+         * apply to a point cloud.
+         */
+        function renderScatterCard(card, cardEl) {
+            const rows = getEffectiveRows();
+            const [xKey, yKey] = card.measures;
+            const points = rows
+                .map(r => ({ x: parseFloat(r[xKey]), y: parseFloat(r[yKey]) }))
+                .filter(p => !isNaN(p.x) && !isNaN(p.y));
+
+            const correlation = computePearsonCorrelation(points.map(p => p.x), points.map(p => p.y));
+
+            const kpiStrip = cardEl.querySelector('.kpi-strip');
+            kpiStrip.innerHTML = `
+                <div class="col-md-6">
+                    <div class="p-3 rounded-3 border border-secondary border-opacity-10 font-monospace" style="background-color: rgba(122, 162, 247, 0.04); border-left: 3px solid var(--tokyo-accent) !important;">
+                        <div class="text-white-50" style="font-size: 10px;">CORRELATION (${escapeHtml(xKey)} vs ${escapeHtml(yKey)})</div>
+                        <div class="fs-4 fw-bold text-white mt-1">r = ${correlation.toFixed(2)} <span class="small text-white-50" style="font-size: 12px;">(${describeCorrelation(correlation)})</span></div>
+                    </div>
+                </div>
+            `;
+            kpiStrip.classList.remove('d-none');
+
+            if (card.chartInstance) {
+                card.chartInstance.destroy();
+                card.chartInstance = null;
+            }
+
+            const activeThemeMode = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+            const fontColorToken = activeThemeMode === 'light' ? '#334155' : '#a9b1d6';
+            const gridColorToken = activeThemeMode === 'light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
+
+            card.chartInstance = new Chart(cardEl.querySelector('.card-canvas'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: `${xKey} vs ${yKey}`,
+                        data: points,
+                        backgroundColor: 'hsla(200, 80%, 60%, 0.65)',
+                        borderColor: 'hsla(200, 80%, 55%, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { color: fontColorToken, font: { family: 'Roboto Mono', size: 11 } } }
+                    },
+                    scales: {
+                        x: { title: { display: true, text: xKey, color: fontColorToken }, grid: { color: gridColorToken }, ticks: { color: fontColorToken, font: { family: 'Roboto Mono' } } },
+                        y: { title: { display: true, text: yKey, color: fontColorToken }, grid: { color: gridColorToken }, ticks: { color: fontColorToken, font: { family: 'Roboto Mono' } } }
+                    }
+                }
+            });
+            card.lastRenderedLabels = [];
+            card.lastRenderedKeys = [];
         }
 
         /**
@@ -2942,7 +3438,7 @@ function exportHistoryToCSV() {
         function readCardConfigFromDOM(card) {
             const el = document.querySelector(`[data-card-id="${card.id}"]`);
             card.chartType = el.querySelector('.chart-type-select').value;
-            card.dimension = el.querySelector('.label-col-select').value;
+            card.dimensions = Array.from(el.querySelector('.label-col-select').selectedOptions).map(o => o.value).slice(0, 3);
             card.aggregation = el.querySelector('.chart-agg-select').value;
             card.measures = Array.from(el.querySelector('.data-col-select').selectedOptions).map(o => o.value);
             card.sortDir = el.querySelector('.sort-dir-select').value;
@@ -2965,7 +3461,17 @@ function exportHistoryToCSV() {
 
             readCardConfigFromDOM(card);
 
-            if (!card.dimension || card.measures.length === 0) return;
+            if (card.chartType === 'scatter') {
+                if (card.measures.length !== 2) {
+                    if (comboWarning) comboWarning.classList.remove('d-none');
+                    return;
+                }
+                if (comboWarning) comboWarning.classList.add('d-none');
+                renderScatterCard(card, cardEl);
+                return;
+            }
+
+            if (!card.dimensions || card.dimensions.length === 0 || card.measures.length === 0) return;
 
             if (card.chartType === 'combo' && card.measures.length !== 2) {
                 if (comboWarning) comboWarning.classList.remove('d-none');
@@ -2974,9 +3480,10 @@ function exportHistoryToCSV() {
             if (comboWarning) comboWarning.classList.add('d-none');
 
             const rows = getEffectiveRows();
-            let model = processSemanticModel(rows, card.dimension, card.measures, card.aggregation);
+            let model = processSemanticModel(rows, card.dimensions, card.measures, card.aggregation);
             model = applySortAndTopN(model, card.sortDir, card.topN);
             card.lastRenderedLabels = model.labels;
+            card.lastRenderedKeys = model.labelKeys;
 
             generateBIMetricsSummaryCards(model.labels, model.datasets, cardEl.querySelector('.kpi-strip'));
 
@@ -3084,9 +3591,9 @@ function exportHistoryToCSV() {
                     scales: scalesConfig,
                     onClick: (evt, elements) => {
                         if (!elements || elements.length === 0) return;
-                        const clickedLabel = card.lastRenderedLabels[elements[0].index];
-                        if (clickedLabel === undefined) return;
-                        toggleDrillDownFilter(card.dimension, clickedLabel);
+                        const keys = card.lastRenderedKeys[elements[0].index];
+                        if (!keys) return;
+                        toggleDrillDownFilters(keys);
                     }
                 }
             });
@@ -3098,9 +3605,9 @@ function exportHistoryToCSV() {
 
         function makeDefaultCard(id) {
             return {
-                id, chartType: 'bar', dimension: null, aggregation: 'NONE', measures: [],
+                id, chartType: 'bar', dimensions: [], aggregation: 'NONE', measures: [],
                 sortDir: 'none', topN: null, trendline: false, showGrid: true, stacked: false,
-                chartInstance: null, lastRenderedLabels: []
+                chartInstance: null, lastRenderedLabels: [], lastRenderedKeys: []
             };
         }
 
