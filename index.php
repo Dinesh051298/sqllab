@@ -732,66 +732,143 @@
                         </div>
 
                         <div class="tab-pane fade" id="viz-panel">
-                             <div id="viz-controls" class="p-4 rounded-4 shadow-sm mb-4 border border-secondary border-opacity-10" style="background-color: #16161e;">
-                                <div class="row g-3">
-                                    <div class="col-md-3">
-                                        <label class="form-label text-white-50 font-monospace" style="font-size: 11px; fw-bold;">1. VISUAL TYPE</label>
-                                        <select id="chart-type-select" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label text-white-50 font-monospace" style="font-size: 11px; fw-bold;">2. AXIS DIMENSION (X-AXIS)</label>
-                                        <select id="label-col-select" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label text-white-50 font-monospace" style="font-size: 11px; fw-bold;">3. AGGREGATION RULE</label>
-                                        <select id="chart-agg-select" class="form-select form-select-sm bg-dark text-white border-secondary">
-                                            <option value="NONE" selected>None (Plot Raw Records)</option>
-                                            <option value="SUM">SUM (Total values)</option>
-                                            <option value="AVG">AVERAGE (Mean calculation)</option>
-                                            <option value="COUNT">COUNT (Row occurances)</option>
-                                            <option value="MIN">MINIMUM (Floor baseline)</option>
-                                            <option value="MAX">MAXIMUM (Ceiling peak)</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label text-white-50 font-monospace" style="font-size: 11px; fw-bold;">4. MEASURE METRICS (Y-AXIS)</label>
-                                        <select id="data-col-select" class="form-select form-select-sm bg-dark text-white border-secondary" multiple style="min-height: 38px; max-height: 120px;"></select>
-                                        <small class="text-white-50 d-block mt-1" style="font-size: 10px;">Hold Ctrl / Cmd to select multiple measures</small>
-                                    </div>
-                                </div>
-                        
-                                <hr class="border-secondary opacity-15 my-3">
-                        
+                            <div class="analytics-card mb-3 p-3 rounded-4 bg-dark bg-opacity-50">
                                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                                    <div class="d-flex align-items-center gap-4">
-                                        <div class="form-check form-switch p-0 m-0 d-flex align-items-center gap-2">
-                                            <input class="form-check-input ms-0 m-0" type="checkbox" id="chart-toggle-grid" checked style="cursor: pointer;">
-                                            <label class="form-check-label text-white-50 font-monospace" for="chart-toggle-grid" style="font-size: 11px; cursor: pointer;">Show Gridlines</label>
-                                        </div>
-                                        <div class="form-check form-switch p-0 m-0 d-flex align-items-center gap-2">
-                                            <input class="form-check-input ms-0 m-0" type="checkbox" id="chart-toggle-stacked" style="cursor: pointer;">
-                                            <label class="form-check-label text-white-50 font-monospace" for="chart-toggle-stacked" style="font-size: 11px; cursor: pointer;">Stacked Layout</label>
-                                        </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-info-circle text-info"></i>
+                                        <span class="small text-white-50">Build up to 4 visuals from this result set. Add slicers or click a chart to drill down &mdash; every visual and the results table stay in sync.</span>
                                     </div>
-                                    <button id="update-chart-btn" class="btn btn-info btn-sm fw-bold px-4 tracking-wider text-white">
-                                        <i class="bi bi-lightning-charge-fill me-1"></i> RENDER DASHBOARD VISUAL
+                                    <button id="add-visual-btn" class="btn btn-sm btn-outline-info fw-bold px-3">
+                                        <i class="bi bi-plus-lg me-1"></i> ADD VISUAL
                                     </button>
                                 </div>
                             </div>
-                        
-                            <div id="bi-kpi-strip" class="row g-3 mb-4 d-none">
+
+                            <div class="p-3 rounded-4 shadow-sm mb-3 border border-secondary border-opacity-10" style="background-color: #16161e;">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-3">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">CALCULATED MEASURE NAME</label>
+                                        <input type="text" id="calc-measure-name" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="e.g. Total">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">COLUMN A</label>
+                                        <select id="calc-measure-col-a" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">OPERATOR</label>
+                                        <select id="calc-measure-op" class="form-select form-select-sm bg-dark text-white border-secondary">
+                                            <option value="+">+ (Add)</option>
+                                            <option value="-">- (Subtract)</option>
+                                            <option value="*">&times; (Multiply)</option>
+                                            <option value="/">&divide; (Divide)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">COLUMN B</label>
+                                        <select id="calc-measure-col-b" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
+                                    </div>
+                                    <div class="col-md-1">
+                                        <button id="add-calc-measure-btn" class="btn btn-sm btn-info fw-bold w-100">ADD</button>
+                                    </div>
                                 </div>
-                        
-                            <div class="chart-container rounded-4 bg-dark bg-opacity-25 p-4 border border-secondary border-opacity-10 position-relative" style="min-height: 480px; height: 550px;">
-                                <canvas id="results-chart"></canvas>
+                                <div id="calc-measure-list" class="d-flex flex-wrap gap-2 mt-3"></div>
                             </div>
+
+                            <div class="p-3 rounded-4 shadow-sm mb-3 border border-secondary border-opacity-10" style="background-color: #16161e;">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">ADD SLICER (FILTER) ON COLUMN</label>
+                                        <select id="slicer-col-select" class="form-select form-select-sm bg-dark text-white border-secondary"></select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button id="add-slicer-btn" class="btn btn-sm btn-outline-warning fw-bold w-100">ADD SLICER</button>
+                                    </div>
+                                </div>
+                                <div id="slicer-panel" class="d-flex flex-wrap gap-3 mt-3"></div>
+                                <div id="active-filters-bar" class="d-flex flex-wrap gap-2 mt-3"></div>
+                            </div>
+
+                            <div id="dashboard-cards-container" class="row g-3"></div>
                         </div>
+
+                        <template id="chart-card-template">
+                            <div class="col-md-6 chart-card-col">
+                                <div class="p-3 rounded-4 shadow-sm border border-secondary border-opacity-10 h-100" style="background-color: #16161e;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold text-info font-monospace card-title-label" style="font-size: 12px;">VISUAL</span>
+                                        <div class="d-flex gap-2">
+                                            <button class="btn btn-sm btn-outline-secondary py-0 px-2 export-png-btn" title="Export PNG"><i class="bi bi-image"></i></button>
+                                            <button class="btn btn-sm btn-outline-danger py-0 px-2 remove-card-btn" title="Remove visual"><i class="bi bi-x-lg"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="row g-2 mb-1">
+                                        <div class="col-6 col-lg-3">
+                                            <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">TYPE</label>
+                                            <select class="form-select form-select-sm bg-dark text-white border-secondary chart-type-select"></select>
+                                        </div>
+                                        <div class="col-6 col-lg-3">
+                                            <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">X-AXIS</label>
+                                            <select class="form-select form-select-sm bg-dark text-white border-secondary label-col-select"></select>
+                                        </div>
+                                        <div class="col-6 col-lg-3">
+                                            <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">AGGREGATION</label>
+                                            <select class="form-select form-select-sm bg-dark text-white border-secondary chart-agg-select">
+                                                <option value="NONE" selected>None (Raw)</option>
+                                                <option value="SUM">SUM</option>
+                                                <option value="AVG">AVERAGE</option>
+                                                <option value="COUNT">COUNT</option>
+                                                <option value="MIN">MINIMUM</option>
+                                                <option value="MAX">MAXIMUM</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-6 col-lg-3">
+                                            <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">MEASURES (hold Ctrl for multiple)</label>
+                                            <select class="form-select form-select-sm bg-dark text-white border-secondary data-col-select" multiple style="min-height: 34px; max-height: 80px;"></select>
+                                            <small class="text-danger d-none combo-warning" style="font-size: 10px;">Select exactly 2 measures for a Combo chart.</small>
+                                        </div>
+                                    </div>
+                                    <div class="row g-2 mb-2 align-items-center">
+                                        <div class="col-6 col-lg-2">
+                                            <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">SORT</label>
+                                            <select class="form-select form-select-sm bg-dark text-white border-secondary sort-dir-select">
+                                                <option value="none">None</option>
+                                                <option value="asc">Ascending</option>
+                                                <option value="desc">Descending</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-6 col-lg-2">
+                                            <label class="form-label text-white-50 font-monospace" style="font-size: 10px;">TOP N</label>
+                                            <input type="number" min="1" class="form-control form-control-sm bg-dark text-white border-secondary top-n-input" placeholder="All">
+                                        </div>
+                                        <div class="col-6 col-lg-2 form-check form-switch d-flex align-items-center gap-2 mt-4 ps-4">
+                                            <input class="form-check-input trendline-toggle" type="checkbox">
+                                            <label class="form-check-label text-white-50 font-monospace" style="font-size: 10px;">Trendline</label>
+                                        </div>
+                                        <div class="col-6 col-lg-2 form-check form-switch d-flex align-items-center gap-2 mt-4 ps-4">
+                                            <input class="form-check-input toggle-grid" type="checkbox" checked>
+                                            <label class="form-check-label text-white-50 font-monospace" style="font-size: 10px;">Gridlines</label>
+                                        </div>
+                                        <div class="col-6 col-lg-2 form-check form-switch d-flex align-items-center gap-2 mt-4 ps-4">
+                                            <input class="form-check-input toggle-stacked" type="checkbox">
+                                            <label class="form-check-label text-white-50 font-monospace" style="font-size: 10px;">Stacked</label>
+                                        </div>
+                                        <div class="col-6 col-lg-2 mt-4 text-end">
+                                            <button class="btn btn-info btn-sm fw-bold px-3 render-card-btn"><i class="bi bi-lightning-charge-fill me-1"></i>RENDER</button>
+                                        </div>
+                                    </div>
+                                    <div class="kpi-strip row g-2 mb-3 d-none"></div>
+                                    <div class="chart-container rounded-3 bg-dark bg-opacity-25 p-3 border border-secondary border-opacity-10 position-relative" style="min-height: 320px; height: 360px;">
+                                        <canvas class="card-canvas"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
 
                         <div class="tab-pane fade" id="shared-history-panel">
                             <div class="mb-3 px-1">
                                 <div class="input-group input-group-sm border-secondary shadow-inner" style="max-width: 400px;">
                                     <span class="input-group-text bg-dark border-secondary text-info"><i class="bi bi-search"></i></span>
-                                    <input type="text" id="history-name-search" class="form-control bg-dark text-light border-secondary" placeholder="Filter log outputs by Student Name..." oninput="fetchSharedHistory()">
+                                    <input type="text" id="history-name-search" class="form-control bg-dark text-light border-secondary" placeholder="Filter log outputs by Student Name / notes" oninput="fetchSharedHistory()">
                                 </div>
                             </div>
                             <div class="table-container border-0">
@@ -922,10 +999,16 @@
         const API_ENDPOINT = 'api.php';
         let currentResults = { headers: [], data: [] };
         let queryHistory = JSON.parse(localStorage.getItem('sqlLabHistory')) || [];
-        let resultsChart = null;
-        let dbMode = 'ro'; 
+        let dbMode = 'ro';
         let dbTables = {}; // Dynamic Metadata Repository
         let activeStudentName = 'Anonymous'; // Default state identity wrapper
+
+        // --- BI Analytics engine state ---
+        let calculatedMeasures = [];      // [{ name, colA, op, colB }] - simple binary-op derived columns
+        let augmentedData = [];           // currentResults.data + calculated measure columns (cached)
+        let activeFilters = {};           // { colName: Set(allowedValues) } - shared slicer + drill-down state
+        let dashboard = { cards: [] };    // chart card configs, max 4
+        let cardIdCounter = 0;
 
         /**
          * Enhanced Theme Manager: Light & Dark Mode
@@ -2429,11 +2512,22 @@ function exportHistoryToCSV() {
             document.getElementById('viz-tab').disabled = false;
 
             document.getElementById('results-header').innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-            document.getElementById('results-body').innerHTML = data.map(row => `
+            renderResultsTable(getEffectiveRows());
+
+            populateCalcMeasureColumnPickers(headers);
+            populateSlicerColumnPicker(headers);
+            renderActiveFiltersBar();
+            renderCalcMeasureList();
+
+            dashboard.cards.forEach(c => populateVisualizationControls(headers, augmentedData, c.id));
+            renderAllCards();
+        }
+
+        function renderResultsTable(rows) {
+            const headers = currentResults.headers;
+            document.getElementById('results-body').innerHTML = rows.map(row => `
                 <tr>${headers.map(h => `<td>${row[h] ?? '<span class="text-white-50 x-small italic">NULL</span>'}</td>`).join('')}</tr>
             `).join('');
-
-            populateVisualizationControls(headers, data);
         }
 
         function displayMessage(type, text) {
