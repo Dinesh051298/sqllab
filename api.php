@@ -82,10 +82,18 @@ try {
             break;
 
         case 'generate_sql':
-            if (empty(trim($input['prompt'] ?? ''))) throw new Exception("Prompt is empty.");
-            echo json_encode(['sql' => "-- AI Generated:\nSELECT * FROM students LIMIT 10;"]);
+            $prompt = trim($input['prompt'] ?? '');
+            if (empty($prompt)) throw new Exception("Prompt is empty.");
+            $active_config = resolve_database_context($input, $rw_db_config, $ro_db_config);
+            generate_sql_rule_based($prompt, $active_config);
             break;
-            
+
+        case 'tutor_chat':
+            $message = trim($input['message'] ?? '');
+            if (empty($message)) throw new Exception("Message is empty.");
+            tutor_lookup_reply($message);
+            break;
+
         case 'get_history':
             // Capture search filtering patterns
             $search_name = $input['student_name'] ?? '';
@@ -125,6 +133,266 @@ function db_connect($config) {
     }
     $conn->set_charset("utf8mb4");
     return $conn;
+}
+
+function get_schema_map($db_config, $max_tables = 50) {
+    $conn = db_connect($db_config);
+    $tables_result = $conn->query("SHOW TABLES");
+    $map = [];
+    $count = 0;
+    while ($row = $tables_result->fetch_array()) {
+        if ($count >= $max_tables) break;
+        $table = $row[0];
+        $columns = [];
+        $cols_result = $conn->query("DESCRIBE `$table`");
+        if ($cols_result) {
+            while ($col = $cols_result->fetch_assoc()) {
+                $columns[] = $col['Field'];
+            }
+        }
+        $map[$table] = $columns;
+        $count++;
+    }
+    $conn->close();
+    return $map;
+}
+
+function find_matching_table($lowerPrompt, $schemaMap) {
+    $best = null;
+    $bestLen = 0;
+    foreach (array_keys($schemaMap) as $table) {
+        $tableLower = strtolower($table);
+        $variants = [$tableLower];
+        $variants[] = (substr($tableLower, -1) === 's') ? substr($tableLower, 0, -1) : ($tableLower . 's');
+
+        foreach ($variants as $variant) {
+            if ($variant !== '' && preg_match('/\b' . preg_quote($variant, '/') . '\b/i', $lowerPrompt)) {
+                if (strlen($tableLower) > $bestLen) {
+                    $best = $table;
+                    $bestLen = strlen($tableLower);
+                }
+                break;
+            }
+        }
+    }
+    return $best;
+}
+
+function find_matching_column($text, $columns) {
+    $lowerText = strtolower($text);
+    $best = null;
+    $bestLen = 0;
+    foreach ($columns as $col) {
+        $colLower = strtolower($col);
+        if (preg_match('/\b' . preg_quote($colLower, '/') . '\b/i', $lowerText)) {
+            if (strlen($col) > $bestLen) {
+                $best = $col;
+                $bestLen = strlen($col);
+            }
+        }
+    }
+    return $best;
+}
+
+function generate_sql_rule_based($prompt, $db_config) {
+    $schemaMap = get_schema_map($db_config);
+    $lower = strtolower($prompt);
+
+    $table = find_matching_table($lower, $schemaMap);
+    if ($table === null) {
+        $available = implode(', ', array_keys($schemaMap));
+        echo json_encode([
+            'sql' => '',
+            'explanation' => "I couldn't match your question to a table in this database. Available tables: " . ($available ?: 'none') . ". Try mentioning a table name directly, e.g. \"show me the students table\"."
+        ]);
+        return;
+    }
+
+    $columns = $schemaMap[$table];
+
+    if (preg_match('/\b(look like|structure|columns|describe|schema|fields)\b/i', $lower)) {
+        echo json_encode([
+            'sql' => '',
+            'explanation' => "The `$table` table has these columns: " . implode(', ', $columns) . "."
+        ]);
+        return;
+    }
+
+    if (preg_match('/\b(how many|count of|number of)\b/i', $lower)) {
+        echo json_encode([
+            'sql' => "SELECT COUNT(*) AS total FROM `$table`;",
+            'explanation' => "Counts the total number of rows in the `$table` table."
+        ]);
+        return;
+    }
+
+    $whereParts = [];
+    $describedConditions = [];
+    $comparisonPatterns = [
+        '/\b(?:above|greater than|more than|over)\s+(\d+(?:\.\d+)?)/i' => '>',
+        '/\b(?:below|less than|under)\s+(\d+(?:\.\d+)?)/i' => '<',
+        '/\bat least\s+(\d+(?:\.\d+)?)/i' => '>=',
+        '/\bat most\s+(\d+(?:\.\d+)?)/i' => '<=',
+    ];
+    foreach ($columns as $col) {
+        if (strpos($lower, strtolower($col)) === false) continue;
+        foreach ($comparisonPatterns as $pattern => $operator) {
+            if (preg_match($pattern, $lower, $m)) {
+                $value = end($m);
+                if (is_numeric($value)) {
+                    $whereParts[] = "`$col` $operator $value";
+                    $describedConditions[] = "$col $operator $value";
+                    break;
+                }
+            }
+        }
+    }
+
+    $sortCol = null;
+    $sortDir = 'ASC';
+    if (preg_match('/\b(?:order by|sorted by|sort by)\s+([a-z0-9_ ]+?)(?:\s+(asc|ascending|desc|descending))?$/i', trim($lower), $m)) {
+        $candidate = find_matching_column(trim($m[1]), $columns);
+        if ($candidate) {
+            $sortCol = $candidate;
+            if (!empty($m[2]) && stripos($m[2], 'desc') === 0) $sortDir = 'DESC';
+        }
+    }
+    if (preg_match('/\b(?:highest|descending)\b/i', $lower)) $sortDir = 'DESC';
+    if (preg_match('/\b(?:lowest|ascending)\b/i', $lower)) $sortDir = 'ASC';
+
+    $limit = null;
+    if (preg_match('/\btop\s+(\d+)\b/i', $lower, $m)) {
+        $limit = (int)$m[1];
+        if (!$sortCol) $sortDir = 'DESC';
+    } elseif (preg_match('/\bfirst\s+(\d+)\b/i', $lower, $m)) {
+        $limit = (int)$m[1];
+    } elseif (preg_match('/\blimit\s+(\d+)\b/i', $lower, $m)) {
+        $limit = (int)$m[1];
+    }
+
+    if ($limit && !$sortCol && preg_match('/\bby\s+([a-z0-9_ ]+)/i', $lower, $m2)) {
+        $candidate = find_matching_column(trim($m2[1]), $columns);
+        if ($candidate) $sortCol = $candidate;
+    }
+
+    if ($limit === null && empty($whereParts) && !$sortCol) {
+        $limit = 10;
+    }
+
+    $sql = "SELECT * FROM `$table`";
+    if (!empty($whereParts)) $sql .= " WHERE " . implode(' AND ', $whereParts);
+    if ($sortCol) $sql .= " ORDER BY `$sortCol` $sortDir";
+    if ($limit) $sql .= " LIMIT $limit";
+    $sql .= ";";
+
+    $explanationParts = ["Rows from `$table`"];
+    if (!empty($describedConditions)) $explanationParts[] = "where " . implode(' and ', $describedConditions);
+    if ($sortCol) $explanationParts[] = "sorted by $sortCol (" . strtolower($sortDir) . ")";
+    if ($limit) $explanationParts[] = "limited to $limit rows";
+
+    echo json_encode([
+        'sql' => $sql,
+        'explanation' => implode(', ', $explanationParts) . "."
+    ]);
+}
+
+function tutor_lookup_reply($message) {
+    $topics = [
+        [
+            'keywords' => ['join', 'inner join', 'left join', 'right join', 'combine tables', 'combining tables'],
+            'reply' => "A JOIN combines rows from two or more tables based on a related column between them.\n\n" .
+                "- INNER JOIN: only rows that match in both tables.\n" .
+                "- LEFT JOIN: all rows from the left table, plus matches from the right (NULLs if no match).\n" .
+                "- RIGHT JOIN: the mirror of LEFT JOIN.\n\n" .
+                "Example:\n```sql\nSELECT s.name, c.course_name\nFROM students s\nINNER JOIN courses c ON s.course_id = c.id;\n```"
+        ],
+        [
+            'keywords' => ['group by', 'grouping'],
+            'reply' => "GROUP BY buckets rows into groups that share the same value in one or more columns, so you can run aggregate functions (SUM, COUNT, AVG, MIN, MAX) per group instead of over the whole table.\n\n" .
+                "Example:\n```sql\nSELECT department, COUNT(*) AS total\nFROM students\nGROUP BY department;\n```"
+        ],
+        [
+            'keywords' => ['having'],
+            'reply' => "HAVING filters groups AFTER a GROUP BY aggregation, whereas WHERE filters individual rows BEFORE grouping.\n\n" .
+                "Example:\n```sql\nSELECT department, COUNT(*) AS total\nFROM students\nGROUP BY department\nHAVING COUNT(*) > 10;\n```"
+        ],
+        [
+            'keywords' => ['where', 'filter', 'filtering', 'condition'],
+            'reply' => "WHERE filters rows before any grouping, keeping only the rows that satisfy a condition.\n\n" .
+                "Example:\n```sql\nSELECT * FROM students WHERE score > 80;\n```"
+        ],
+        [
+            'keywords' => ['order by', 'sort', 'sorting'],
+            'reply' => "ORDER BY sorts your result set by one or more columns, ascending (ASC, default) or descending (DESC).\n\n" .
+                "Example:\n```sql\nSELECT * FROM students ORDER BY score DESC;\n```"
+        ],
+        [
+            'keywords' => ['limit', 'top n', 'first n rows'],
+            'reply' => "LIMIT restricts how many rows come back, commonly paired with ORDER BY to get a \"Top N\" result.\n\n" .
+                "Example:\n```sql\nSELECT * FROM students ORDER BY score DESC LIMIT 5;\n```"
+        ],
+        [
+            'keywords' => ['distinct'],
+            'reply' => "DISTINCT removes duplicate rows from the result, keeping only unique combinations of the selected columns.\n\n" .
+                "Example:\n```sql\nSELECT DISTINCT department FROM students;\n```"
+        ],
+        [
+            'keywords' => ['subquery', 'nested query', 'inner query'],
+            'reply' => "A subquery is a query nested inside another query, often used inside WHERE/IN or as a derived table.\n\n" .
+                "Example:\n```sql\nSELECT name FROM students\nWHERE score > (SELECT AVG(score) FROM students);\n```"
+        ],
+        [
+            'keywords' => ['union'],
+            'reply' => "UNION combines the results of two SELECT statements into one result set, removing duplicates (use UNION ALL to keep duplicates). Both SELECTs need the same number of columns with compatible types.\n\n" .
+                "Example:\n```sql\nSELECT name FROM students\nUNION\nSELECT name FROM alumni;\n```"
+        ],
+        [
+            'keywords' => ['primary key'],
+            'reply' => "A PRIMARY KEY uniquely identifies each row in a table. It can't be NULL and can't repeat, and a table can only have one.\n\n" .
+                "Example:\n```sql\nCREATE TABLE students (\n  id INT PRIMARY KEY,\n  name VARCHAR(100)\n);\n```"
+        ],
+        [
+            'keywords' => ['foreign key'],
+            'reply' => "A FOREIGN KEY links a column in one table to the PRIMARY KEY of another, enforcing that the value must exist there - this is how relational databases connect related tables.\n\n" .
+                "Example:\n```sql\nCREATE TABLE enrollments (\n  student_id INT,\n  FOREIGN KEY (student_id) REFERENCES students(id)\n);\n```"
+        ],
+        [
+            'keywords' => ['index', 'indexes', 'indexing'],
+            'reply' => "An INDEX speeds up lookups on a column (like a book's index) at the cost of extra storage and slightly slower writes. Primary keys are indexed automatically.\n\n" .
+                "Example:\n```sql\nCREATE INDEX idx_score ON students(score);\n```"
+        ],
+        [
+            'keywords' => ['count', 'sum', 'avg', 'average', 'aggregate function'],
+            'reply' => "Aggregate functions compute one value from many rows: COUNT (number of rows), SUM (total), AVG (average), MIN, and MAX. They're usually paired with GROUP BY.\n\n" .
+                "Example:\n```sql\nSELECT AVG(score) AS avg_score FROM students;\n```"
+        ],
+    ];
+
+    $lower = strtolower($message);
+    $best = null;
+    $bestScore = 0;
+
+    foreach ($topics as $topic) {
+        $score = 0;
+        foreach ($topic['keywords'] as $keyword) {
+            if (strpos($lower, $keyword) !== false) {
+                $score += strlen($keyword);
+            }
+        }
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $best = $topic;
+        }
+    }
+
+    if ($best === null) {
+        $allTopics = ['JOIN', 'GROUP BY', 'HAVING', 'WHERE', 'ORDER BY', 'LIMIT', 'DISTINCT', 'subqueries', 'UNION', 'primary keys', 'foreign keys', 'indexes', 'aggregate functions (COUNT/SUM/AVG/MIN/MAX)'];
+        $reply = "I don't have a canned explanation for that yet. Try asking about one of: " . implode(', ', $allTopics) . ".";
+    } else {
+        $reply = $best['reply'];
+    }
+
+    echo json_encode(['reply' => $reply]);
 }
 
 function resolve_database_context($input, $rw_config, $ro_config) {
@@ -230,7 +498,7 @@ function run_query_dynamically($query, $target_config, $logging_config, $db_mode
         throw new Exception("SQL query cannot be empty."); 
     }
     // Security Restriction Guardrail: Blanket ban on targeting administrative infrastructure tables
-    if (preg_match('/\b(query_history|system_custom_databases| query_notes)\b/i', $query)) {
+    if (preg_match('/\b(query_history|system_custom_databases|query_notes)\b/i', $query)) {
         throw new Exception("Security Restriction: Access to protected internal system catalog tables is denied by Skills Builder Hub!");
     }
         

@@ -656,6 +656,9 @@
                         <li class="nav-item">
                             <button class="nav-link" id="guide-tab" data-bs-toggle="tab" data-bs-target="#guide-panel" type="button"><i class="bi bi-question-circle me-1"></i>GUIDE</button>
                         </li>
+                        <li class="nav-item">
+                            <button class="nav-link" id="tutor-tab" data-bs-toggle="tab" data-bs-target="#tutor-panel" type="button"><i class="bi bi-chat-dots-fill me-1"></i>AI TUTOR</button>
+                        </li>
                     </ul>
 
                     <div class="tab-content">
@@ -1085,6 +1088,24 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="tab-pane fade" id="tutor-panel">
+                            <div class="analytics-card mb-3 p-3 rounded-4 bg-dark bg-opacity-50">
+                                <i class="bi bi-info-circle text-info me-2"></i>
+                                <span class="small text-white-50">Ask general SQL concept questions &mdash; e.g. "what is a JOIN", "explain GROUP BY". This chat is independent of your database/query editor.</span>
+                            </div>
+                            <div id="tutor-messages" class="d-flex flex-column gap-2 p-3 rounded-4 border border-secondary border-opacity-25 mb-3" style="background-color: #16161e; max-height: 420px; overflow-y: auto;">
+                                <div class="text-center small text-white-50 fst-italic">Ask your first SQL question below.</div>
+                            </div>
+                            <div id="tutor-error" class="text-danger small mb-2 d-none font-monospace"></div>
+                            <div class="input-group">
+                                <textarea id="tutor-input" class="form-control bg-black text-info border-secondary font-monospace" rows="2" placeholder="e.g. What is the difference between INNER JOIN and LEFT JOIN?"></textarea>
+                                <button id="tutor-send-btn" class="btn btn-info fw-bold text-white px-4">
+                                    <span id="tutor-btn-text"><i class="bi bi-send-fill"></i></span>
+                                    <div id="tutor-btn-loader" class="spinner-border spinner-border-sm d-none"></div>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1173,6 +1194,12 @@
                     <p class="text-white-50 small mb-3">Define your business requirement in natural language. The engine will synthesize a valid and optimized MySQL statement.</p>
                     <textarea id="ai-prompt" class="form-control bg-black text-info border-secondary font-monospace" rows="5" placeholder="e.g. Calculate the year-over-year growth percentage for total sales per category, filtered by 'Active' region..."></textarea>
                     <div id="ai-error" class="text-danger small mt-2 d-none font-monospace"></div>
+                    <div id="ai-response-area" class="d-none mt-3">
+                        <div id="ai-explanation" class="small text-white-50 font-monospace"></div>
+                        <button type="button" id="ai-insert-sql-btn" class="btn btn-sm btn-outline-success mt-2 d-none">
+                            <i class="bi bi-arrow-down-circle me-1"></i> INSERT INTO EDITOR
+                        </button>
+                    </div>
                 </div>
                 <div class="modal-footer border-secondary border-opacity-25">
                     <button type="button" class="btn btn-dark btn-sm px-3 shadow" data-bs-dismiss="modal">CANCEL</button>
@@ -3701,17 +3728,32 @@ function exportHistoryToCSV() {
             const loader = document.getElementById('ai-btn-loader');
             const text = document.getElementById('ai-btn-text');
             const err = document.getElementById('ai-error');
-            
+            const responseArea = document.getElementById('ai-response-area');
+            const explanationEl = document.getElementById('ai-explanation');
+            const insertBtn = document.getElementById('ai-insert-sql-btn');
+
             if(!prompt) return;
             err.classList.add('d-none');
+            responseArea.classList.add('d-none');
+            insertBtn.classList.add('d-none');
             text.classList.add('d-none');
             loader.classList.remove('d-none');
 
             try {
                 const res = await fetchAPI('generate_sql', { prompt });
-                editor.setValue(res.sql);
-                bootstrap.Modal.getInstance(document.getElementById('aiAssistModal')).hide();
-            } catch(e) { 
+                explanationEl.innerText = res.explanation || '';
+                responseArea.classList.remove('d-none');
+
+                if (res.sql) {
+                    insertBtn.classList.remove('d-none');
+                    insertBtn.onclick = () => {
+                        editor.setValue(res.sql);
+                        bootstrap.Modal.getInstance(document.getElementById('aiAssistModal')).hide();
+                    };
+                } else {
+                    insertBtn.classList.add('d-none');
+                }
+            } catch(e) {
                 err.innerText = e.message;
                 err.classList.remove('d-none');
             } finally {
@@ -3719,9 +3761,79 @@ function exportHistoryToCSV() {
                 loader.classList.add('d-none');
             }
         };
-        
-        
-        
+
+        let tutorHistory = [];
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.innerText = str;
+            return div.innerHTML;
+        }
+
+        function formatTutorText(text) {
+            const escaped = escapeHtml(text);
+            return escaped.replace(/```(?:sql)?\s*([\s\S]*?)```/gi, (m, code) => `<pre class="bg-black rounded-3 p-2 mt-1 mb-1"><code>${code.trim()}</code></pre>`);
+        }
+
+        function renderTutorMessage(role, text) {
+            const container = document.getElementById('tutor-messages');
+            const placeholder = container.querySelector('.fst-italic');
+            if (placeholder) placeholder.remove();
+
+            const bubble = document.createElement('div');
+            const isUser = role === 'user';
+            bubble.className = `p-2 px-3 rounded-3 small font-monospace ${isUser ? 'align-self-end bg-primary bg-opacity-25 text-light' : 'align-self-start bg-dark text-white-50'}`;
+            bubble.style.maxWidth = '85%';
+            bubble.innerHTML = formatTutorText(text);
+            container.appendChild(bubble);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendTutorMessage() {
+            const input = document.getElementById('tutor-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const sendBtn = document.getElementById('tutor-send-btn');
+            const btnText = document.getElementById('tutor-btn-text');
+            const btnLoader = document.getElementById('tutor-btn-loader');
+            const err = document.getElementById('tutor-error');
+
+            renderTutorMessage('user', message);
+            tutorHistory.push({ role: 'user', text: message });
+            input.value = '';
+            err.classList.add('d-none');
+            btnText.classList.add('d-none');
+            btnLoader.classList.remove('d-none');
+            sendBtn.disabled = true;
+            input.disabled = true;
+
+            try {
+                const res = await fetchAPI('tutor_chat', { message, history: tutorHistory.slice(0, -1).slice(-12) });
+                renderTutorMessage('model', res.reply);
+                tutorHistory.push({ role: 'model', text: res.reply });
+            } catch (e) {
+                err.innerText = e.message;
+                err.classList.remove('d-none');
+            } finally {
+                btnText.classList.remove('d-none');
+                btnLoader.classList.add('d-none');
+                sendBtn.disabled = false;
+                input.disabled = false;
+                input.focus();
+            }
+        }
+
+        document.getElementById('tutor-send-btn').onclick = sendTutorMessage;
+        document.getElementById('tutor-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendTutorMessage();
+            }
+        });
+
+
+
 // --- CENTRALIZED MULTI-TENANT DATABASE SYSTEM CONFIGURATION ---
 let serverCustomDBs = []; // Populated asynchronously from the centralized backend table
 let currentSessionPassword = '';
